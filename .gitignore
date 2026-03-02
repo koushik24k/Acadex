@@ -1,0 +1,22 @@
+# Maven
+/acadex-backend/target/
+target/
+
+# Node
+node_modules/
+/acadex-react/node_modules/
+
+# Build
+dist/
+build/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+
+# Logs
+*.log
