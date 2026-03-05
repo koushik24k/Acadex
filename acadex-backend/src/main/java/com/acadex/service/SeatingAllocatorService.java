@@ -1,4 +1,4 @@
-﻿package com.acadex.service;
+package com.acadex.service;
 
 import com.acadex.dto.SeatAllocationResponse;
 import com.acadex.dto.SeatAssignment;

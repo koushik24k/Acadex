@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.dto.ApiResponse;
 import com.acadex.entity.Room;
@@ -18,7 +18,13 @@ public class RoomController {
     @Autowired private RoomRepository roomRepository;
 
     @GetMapping
-    public ResponseEntity<?> listRooms(@RequestParam(required = false) String type) {
+    public ResponseEntity<?> listRooms(@RequestParam(required = false) String type,
+                                        @RequestParam(required = false) Long id) {
+        if (id != null) {
+            return roomRepository.findById(id)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        }
         List<Room> rooms;
         if (type != null) {
             rooms = roomRepository.findByRoomType(type);
@@ -56,6 +62,12 @@ public class RoomController {
         return ResponseEntity.ok(room);
     }
 
+    // Query-param based update: PUT /rooms?id=X
+    @PutMapping
+    public ResponseEntity<?> updateRoomByParam(@RequestParam Long id, @RequestBody Map<String, Object> body) {
+        return updateRoom(id, body);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateRoom(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         Room room = roomRepository.findById(id).orElse(null);
@@ -74,6 +86,12 @@ public class RoomController {
         room.setUpdatedAt(LocalDateTime.now().toString());
         roomRepository.save(room);
         return ResponseEntity.ok(room);
+    }
+
+    // Query-param based delete: DELETE /rooms?id=X
+    @DeleteMapping
+    public ResponseEntity<?> deleteRoomByParam(@RequestParam Long id) {
+        return deleteRoom(id);
     }
 
     @DeleteMapping("/{id}")

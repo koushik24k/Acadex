@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.dto.*;
 import com.acadex.entity.*;
@@ -50,6 +50,16 @@ public class SubmissionController {
         result.put("submission", sub);
         result.put("answers", answerRepository.findBySubmissionId(id));
         return ResponseEntity.ok(result);
+    }
+
+    // POST /submissions — frontend sends examId in body
+    @PostMapping
+    public ResponseEntity<?> submitExamFromBody(@RequestBody SubmissionRequest request,
+                                                 Authentication auth) {
+        if (request.getExamId() == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("examId is required"));
+        }
+        return submitExam(request.getExamId(), request, auth);
     }
 
     @PostMapping("/{examId}")
@@ -114,6 +124,59 @@ public class SubmissionController {
         }
 
         return ResponseEntity.ok(ApiResponse.success("Exam submitted successfully"));
+    }
+
+    // POST /submissions/{id}/grade — bulk grade answers (used by frontend)
+    @PostMapping("/{submissionId}/grade")
+    public ResponseEntity<?> gradeSubmission(@PathVariable Long submissionId,
+                                              @RequestBody Map<String, Object> body,
+                                              Authentication auth) {
+        ExamSubmission sub = submissionRepository.findById(submissionId).orElse(null);
+        if (sub == null) return ResponseEntity.notFound().build();
+
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        User user = userRepository.findByEmail(email).orElseThrow();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> grades = (List<Map<String, Object>>) body.get("grades");
+        if (grades != null) {
+            for (Map<String, Object> g : grades) {
+                Long answerId = Long.parseLong(g.get("answerId").toString());
+                Answer answer = answerRepository.findById(answerId).orElse(null);
+                if (answer != null) {
+                    if (g.containsKey("marksAwarded")) answer.setMarksAwarded(Integer.parseInt(g.get("marksAwarded").toString()));
+                    if (g.containsKey("isCorrect")) answer.setIsCorrect((Boolean) g.get("isCorrect"));
+                    if (g.containsKey("feedback")) answer.setFeedback((String) g.get("feedback"));
+                    answerRepository.save(answer);
+                }
+            }
+        }
+
+        // Recalculate total
+        List<Answer> allAnswers = answerRepository.findBySubmissionId(submissionId);
+        int total = allAnswers.stream().mapToInt(a -> a.getMarksAwarded() != null ? a.getMarksAwarded() : 0).sum();
+        sub.setTotalScore(total);
+        sub.setGradedBy(user.getId());
+        sub.setGradedAt(LocalDateTime.now().toString());
+        sub.setStatus("graded");
+        submissionRepository.save(sub);
+
+        // Update result
+        Exam exam = examRepository.findById(sub.getExamId()).orElse(null);
+        if (exam != null) {
+            ExamResult result = resultRepository.findByExamIdAndStudentId(sub.getExamId(), sub.getStudentId()).orElse(null);
+            if (result != null) {
+                result.setObtainedMarks(total);
+                int pct = exam.getTotalMarks() > 0 ? (total * 100) / exam.getTotalMarks() : 0;
+                result.setPercentage(pct);
+                String grade2 = pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B"
+                        : pct >= 50 ? "C+" : pct >= 40 ? "C" : pct >= 30 ? "D" : "F";
+                result.setGrade(grade2);
+                resultRepository.save(result);
+            }
+        }
+
+        return ResponseEntity.ok(ApiResponse.success("Submission graded"));
     }
 
     // Grade a submission answer

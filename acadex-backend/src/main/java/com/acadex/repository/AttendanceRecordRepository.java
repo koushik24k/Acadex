@@ -1,4 +1,4 @@
-﻿package com.acadex.repository;
+package com.acadex.repository;
 
 import java.time.LocalDate;
 import java.util.List;

@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.entity.AuditLog;
 import com.acadex.repository.AuditLogRepository;

@@ -1,4 +1,4 @@
-﻿package com.acadex.dto;
+package com.acadex.dto;
 
 import lombok.Data;
 

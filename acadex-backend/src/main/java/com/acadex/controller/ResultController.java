@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.dto.ApiResponse;
 import com.acadex.entity.ExamResult;

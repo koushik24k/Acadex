@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.dto.ApiResponse;
 import com.acadex.entity.Notification;
@@ -46,6 +46,12 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.success("Marked as read"));
     }
 
+    // Frontend calls PUT /notifications/{id}/read
+    @PutMapping("/{id}/read")
+    public ResponseEntity<?> markReadExplicit(@PathVariable Long id) {
+        return markRead(id);
+    }
+
     @PutMapping("/mark-all-read")
     public ResponseEntity<?> markAllRead(Authentication auth) {
         String email = ((UserDetails) auth.getPrincipal()).getUsername();
@@ -53,6 +59,12 @@ public class NotificationController {
         List<Notification> unread = notificationRepository.findByUserIdAndIsReadOrderByCreatedAtDesc(user.getId(), false);
         unread.forEach(n -> { n.setIsRead(true); notificationRepository.save(n); });
         return ResponseEntity.ok(ApiResponse.success("All marked as read"));
+    }
+
+    // Frontend calls PUT /notifications/read-all
+    @PutMapping("/read-all")
+    public ResponseEntity<?> readAll(Authentication auth) {
+        return markAllRead(auth);
     }
 
     @PostMapping

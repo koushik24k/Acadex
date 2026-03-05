@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.dto.*;
 import com.acadex.entity.*;
@@ -107,6 +107,12 @@ public class ExamController {
         return ResponseEntity.ok(toMap(exam));
     }
 
+    // Query-param based update: PUT /exams?id=X (used by frontend)
+    @PutMapping
+    public ResponseEntity<?> updateExamByParam(@RequestParam Long id, @RequestBody ExamRequest request) {
+        return updateExam(id, request);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateExam(@PathVariable Long id, @RequestBody ExamRequest request) {
         Exam exam = examRepository.findById(id).orElse(null);
@@ -149,6 +155,12 @@ public class ExamController {
             }
         }
         return ResponseEntity.ok(toMap(exam));
+    }
+
+    // Query-param based delete: DELETE /exams?id=X (used by frontend)
+    @DeleteMapping
+    public ResponseEntity<?> deleteExamByParam(@RequestParam Long id) {
+        return deleteExam(id);
     }
 
     @DeleteMapping("/{id}")
@@ -203,6 +215,22 @@ public class ExamController {
         // For faculty/admin ΓÇö list all registrations
         List<ExamRegistration> regs = registrationRepository.findByExamId(examId);
         return ResponseEntity.ok(regs);
+    }
+
+    // Check registration status for current student
+    @GetMapping("/{examId}/check-registration")
+    public ResponseEntity<?> checkRegistration(@PathVariable Long examId, Authentication auth) {
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        User user = userRepository.findByEmail(email).orElseThrow();
+        Optional<ExamRegistration> reg = registrationRepository.findByExamIdAndStudentId(examId, user.getId());
+        if (reg.isPresent()) {
+            Map<String, Object> r = new HashMap<>();
+            r.put("registered", true);
+            r.put("seatNumber", reg.get().getSeatNumber());
+            r.put("status", reg.get().getRegistrationStatus());
+            return ResponseEntity.ok(r);
+        }
+        return ResponseEntity.ok(Map.of("registered", false));
     }
 
     @PostMapping("/{examId}/register")

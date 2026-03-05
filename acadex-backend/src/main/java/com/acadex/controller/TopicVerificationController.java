@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import java.time.LocalDate;
 import java.util.ArrayList;

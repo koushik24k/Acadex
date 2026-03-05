@@ -1,4 +1,4 @@
-﻿package com.acadex.service;
+package com.acadex.service;
 
 import com.acadex.entity.*;
 import com.acadex.repository.*;

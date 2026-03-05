@@ -1,4 +1,4 @@
-﻿package com.acadex.entity;
+package com.acadex.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;

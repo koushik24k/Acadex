@@ -1,4 +1,4 @@
-﻿package com.acadex.entity;
+package com.acadex.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

@@ -1,4 +1,4 @@
-﻿package com.acadex.security;
+package com.acadex.security;
 
 import com.acadex.entity.User;
 import com.acadex.repository.UserRepository;

@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import java.util.LinkedHashMap;
 import java.util.List;

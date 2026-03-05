@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -162,6 +163,12 @@ public class AdminController {
         }
 
         return ResponseEntity.ok(ApiResponse.success("User updated"));
+    }
+
+    // Frontend uses PATCH /admin/users/{id}
+    @PatchMapping("/users/{id}")
+    public ResponseEntity<?> patchUser(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        return updateUser(id, body);
     }
 
     @DeleteMapping("/users/{id}")

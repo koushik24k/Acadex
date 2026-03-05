@@ -74,12 +74,14 @@ export const registrationService = {
   register: (examId, data) => api.post(`/exams/${examId}/register`, data).then((r) => r.data),
   list: (examId, params) => api.get(`/exams/${examId}/registrations`, { params }).then((r) => r.data),
   generateSeating: (examId) => api.post(`/exams/${examId}/seating`).then((r) => r.data),
+  check: (examId) => api.get(`/exams/${examId}/check-registration`).then((r) => r.data),
 };
 
 export const submissionService = {
   list: (params) => api.get('/submissions', { params }).then((r) => r.data),
   get: (id) => api.get(`/submissions/${id}`).then((r) => r.data),
   create: (data) => api.post('/submissions', data).then((r) => r.data),
+  submit: (examId, data) => api.post('/submissions', { ...data, examId }).then((r) => r.data),
   grade: (id, data) => api.post(`/submissions/${id}/grade`, data).then((r) => r.data),
 };
 
@@ -116,11 +118,15 @@ export const notificationService = {
   create: (data) => api.post('/notifications', data).then((r) => r.data),
   update: (id, data) => api.put('/notifications', data, { params: { id } }).then((r) => r.data),
   remove: (id) => api.delete('/notifications', { params: { id } }).then((r) => r.data),
+  markRead: (id) => api.put(`/notifications/${id}/read`).then((r) => r.data),
+  markAllRead: () => api.put('/notifications/read-all').then((r) => r.data),
+  delete: (id) => api.delete(`/notifications/${id}`).then((r) => r.data),
 };
 
 export const revaluationService = {
   list: (params) => api.get('/revaluations', { params }).then((r) => r.data),
   create: (data) => api.post('/revaluations', data).then((r) => r.data),
+  request: (data) => api.post('/revaluations', data).then((r) => r.data),
 };
 
 export const auditLogService = {

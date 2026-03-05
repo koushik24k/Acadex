@@ -1,4 +1,4 @@
-﻿package com.acadex.service;
+package com.acadex.service;
 
 import java.util.*;
 import java.util.stream.Collectors;

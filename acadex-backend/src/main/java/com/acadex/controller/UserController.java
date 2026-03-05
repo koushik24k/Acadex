@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.dto.ApiResponse;
 import com.acadex.entity.User;
@@ -71,5 +71,39 @@ public class UserController {
         result.put("email", user.getEmail());
         result.put("roles", roles);
         return ResponseEntity.ok(result);
+    }
+
+    // GET /users/{id}/roles — returns role objects
+    @GetMapping("/{id}/roles")
+    public ResponseEntity<?> getUserRoles(@PathVariable String id) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) return ResponseEntity.notFound().build();
+
+        List<Map<String, Object>> roleList = new ArrayList<>();
+        if (user.getRoles() != null) {
+            for (UserRole ur : user.getRoles()) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("id", ur.getId());
+                m.put("role", ur.getRole());
+                m.put("department", ur.getDepartment());
+                roleList.add(m);
+            }
+        }
+        return ResponseEntity.ok(roleList);
+    }
+
+    // POST /users/{id}/roles — assign a new role
+    @PostMapping("/{id}/roles")
+    public ResponseEntity<?> assignRole(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        User user = userRepository.findById(id).orElse(null);
+        if (user == null) return ResponseEntity.notFound().build();
+
+        UserRole role = UserRole.builder()
+                .user(user)
+                .role((String) body.get("role"))
+                .department((String) body.get("department"))
+                .build();
+        userRoleRepository.save(role);
+        return ResponseEntity.ok(ApiResponse.success("Role assigned"));
     }
 }

@@ -1,4 +1,4 @@
-﻿package com.acadex.config;
+package com.acadex.config;
 
 import java.time.LocalDate;
 import java.util.Random;

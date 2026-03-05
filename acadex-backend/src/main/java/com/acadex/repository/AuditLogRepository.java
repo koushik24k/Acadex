@@ -1,4 +1,4 @@
-﻿package com.acadex.repository;
+package com.acadex.repository;
 
 import com.acadex.entity.AuditLog;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import com.acadex.dto.ApiResponse;
 import com.acadex.entity.Assignment;
@@ -83,6 +83,12 @@ public class AssignmentController {
         return ResponseEntity.ok(a);
     }
 
+    // Query-param based update: PUT /assignments?id=X
+    @PutMapping
+    public ResponseEntity<?> updateAssignmentByParam(@RequestParam Long id, @RequestBody Map<String, Object> body) {
+        return updateAssignment(id, body);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateAssignment(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         Assignment a = assignmentRepository.findById(id).orElse(null);
@@ -99,10 +105,22 @@ public class AssignmentController {
         return ResponseEntity.ok(a);
     }
 
+    // Query-param based delete: DELETE /assignments?id=X
+    @DeleteMapping
+    public ResponseEntity<?> deleteAssignmentByParam(@RequestParam Long id) {
+        return deleteAssignment(id);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteAssignment(@PathVariable Long id) {
         if (!assignmentRepository.existsById(id)) return ResponseEntity.notFound().build();
         assignmentRepository.deleteById(id);
         return ResponseEntity.ok(ApiResponse.success("Assignment deleted"));
+    }
+
+    // GET /assignments/{id}/submissions
+    @GetMapping("/{id}/submissions")
+    public ResponseEntity<?> getSubmissions(@PathVariable Long id) {
+        return ResponseEntity.ok(submissionRepository.findByAssignmentId(id));
     }
 }

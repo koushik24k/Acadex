@@ -1,4 +1,4 @@
-﻿package com.acadex.controller;
+package com.acadex.controller;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -23,6 +23,7 @@ public class CourseController {
     @Autowired private CourseEnrollmentRepository courseEnrollmentRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private CourseRiskService courseRiskService;
+    @Autowired private AttendanceRecordRepository attendanceRecordRepository;
 
     // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
     //  COURSE CRUD (Admin)
@@ -449,8 +450,11 @@ public class CourseController {
         long completedTopics = courseTopicRepository.countByCourseIdAndCompleted(courseId, true);
         double syllabusCoverage = totalTopics > 0 ? (completedTopics * 100.0 / totalTopics) : 100;
 
-        // Default attendance (could integrate with actual attendance records)
-        double attendance = 80.0;
+        // Calculate real attendance from records
+        List<AttendanceRecord> records = attendanceRecordRepository.findByStudentId(studentId);
+        long totalRecords = records.size();
+        long presentRecords = records.stream().filter(r -> "present".equals(r.getStatus())).count();
+        double attendance = totalRecords > 0 ? Math.round((presentRecords * 100.0 / totalRecords) * 10.0) / 10.0 : 100.0;
 
         boolean eligible = attendance >= 75 && syllabusCoverage >= 80;
         List<String> reasons = new ArrayList<>();
