@@ -1,18 +1,46 @@
 package com.acadex.controller;
 
-import com.acadex.dto.*;
-import com.acadex.entity.*;
-import com.acadex.repository.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import com.acadex.dto.ApiResponse;
+import com.acadex.dto.ExamRequest;
+import com.acadex.dto.QuestionRequest;
+import com.acadex.dto.SeatAllocationResponse;
+import com.acadex.dto.SeatAssignment;
+import com.acadex.entity.Exam;
+import com.acadex.entity.ExamRegistration;
+import com.acadex.entity.Question;
+import com.acadex.entity.Room;
+import com.acadex.entity.SeatAllocation;
+import com.acadex.entity.User;
+import com.acadex.entity.UserRole;
+import com.acadex.repository.ExamRegistrationRepository;
+import com.acadex.repository.ExamRepository;
+import com.acadex.repository.QuestionRepository;
+import com.acadex.repository.RoomRepository;
+import com.acadex.repository.SeatAllocationRepository;
+import com.acadex.repository.UserRepository;
+import com.acadex.repository.UserRoleRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @RestController
 @RequestMapping("/api/exams")
@@ -23,6 +51,9 @@ public class ExamController {
     @Autowired private ExamRegistrationRepository registrationRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private RoomRepository roomRepository;
+    @Autowired private SeatAllocationRepository seatAllocationRepository;
+    @Autowired private com.acadex.service.SeatingAllocatorService seatingAllocatorService;
+    @Autowired private UserRoleRepository userRoleRepository;
     @Autowired private ObjectMapper objectMapper;
 
     @GetMapping
@@ -277,6 +308,91 @@ public class ExamController {
         m.put("questionCount", questionRepository.countByExamId(e.getId()));
         m.put("registrationCount", registrationRepository.countByExamId(e.getId()));
         return m;
+    }
+
+    // ── Seating Allocation ──
+
+    @PostMapping("/{examId}/generate-seating")
+    public ResponseEntity<?> generateSeating(@PathVariable Long examId,
+                                             @RequestBody(required = false) Map<String, Object> body) {
+        Exam exam = examRepository.findById(examId).orElse(null);
+        if (exam == null) return ResponseEntity.notFound().build();
+
+        // Get registered students
+        List<ExamRegistration> regs = registrationRepository.findByExamId(examId);
+        if (regs.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No registrations found for this exam"));
+        }
+
+        // Determine rooms
+        List<Room> rooms;
+        if (body != null && body.containsKey("roomIds")) {
+            List<Number> roomIds = (List<Number>) body.get("roomIds");
+            rooms = roomIds.stream()
+                    .map(id -> roomRepository.findById(id.longValue()).orElse(null))
+                    .filter(r -> r != null)
+                    .collect(Collectors.toList());
+        } else {
+            rooms = roomRepository.findByIsActive(true);
+        }
+        if (rooms.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No rooms available"));
+        }
+
+        String strategy = body != null && body.containsKey("strategy")
+                ? (String) body.get("strategy") : "sequential";
+
+        // Build student info
+        List<com.acadex.service.SeatingAllocatorService.StudentInfo> students = regs.stream().map(reg -> {
+            User user = userRepository.findById(reg.getStudentId()).orElse(null);
+            String dept = "General";
+            if (user != null && user.getRoles() != null) {
+                dept = user.getRoles().stream()
+                        .map(UserRole::getDepartment)
+                        .filter(java.util.Objects::nonNull)
+                        .findFirst().orElse("General");
+            }
+            return new com.acadex.service.SeatingAllocatorService.StudentInfo(
+                    reg.getStudentId(),
+                    user != null ? user.getName() : "Unknown",
+                    user != null ? user.getEmail() : reg.getStudentId(),
+                    dept
+            );
+        }).collect(Collectors.toList());
+
+        // Run allocation
+        SeatAllocationResponse result = seatingAllocatorService.allocate(students, rooms, null, strategy);
+
+        // Persist SeatAllocation entities & update registrations
+        seatAllocationRepository.deleteByExamId(examId);
+        for (SeatAssignment sa : result.getAssignments()) {
+            // Parse room from seat number (format: RoomName-R1C1B1)
+            Long roomId = rooms.get(0).getId(); // default
+            for (Room r : rooms) {
+                if (sa.getSeatNumber() != null && sa.getSeatNumber().startsWith(r.getName())) {
+                    roomId = r.getId();
+                    break;
+                }
+            }
+            SeatAllocation allocation = SeatAllocation.builder()
+                    .examId(examId)
+                    .roomId(roomId)
+                    .studentId(sa.getStudentId())
+                    .seatNumber(sa.getSeatNumber())
+                    .build();
+            seatAllocationRepository.save(allocation);
+
+            // Also update registration
+            regs.stream()
+                    .filter(reg -> reg.getStudentId().equals(sa.getStudentId()))
+                    .findFirst()
+                    .ifPresent(reg -> {
+                        reg.setSeatNumber(sa.getSeatNumber());
+                        registrationRepository.save(reg);
+                    });
+        }
+
+        return ResponseEntity.ok(result);
     }
 
     private Map<String, Object> questionToMap(Question q) {

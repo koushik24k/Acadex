@@ -23,6 +23,9 @@ public class AttendanceRecord {
     @Column(name = "subject_id", nullable = false)
     private Long subjectId;
 
+    @Column(name = "session_id")
+    private Long sessionId;
+
     @Column(nullable = false)
     private LocalDate date;
 

@@ -19,6 +19,9 @@ public class ClassSession {
     @Column(name = "subject_id", nullable = false)
     private Long subjectId;
 
+    @Column(name = "course_id")
+    private Long courseId;
+
     @Column(name = "teacher_id", nullable = false)
     private String teacherId;
 

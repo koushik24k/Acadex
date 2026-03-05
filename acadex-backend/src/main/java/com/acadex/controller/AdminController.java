@@ -38,6 +38,7 @@ import com.acadex.repository.ExamRepository;
 import com.acadex.repository.ExamResultRepository;
 import com.acadex.repository.ExamSubmissionRepository;
 import com.acadex.repository.RoomRepository;
+import com.acadex.repository.SeatAllocationRepository;
 import com.acadex.repository.UserRepository;
 import com.acadex.repository.UserRoleRepository;
 import com.acadex.service.SeatingAllocatorService;
@@ -56,6 +57,12 @@ public class AdminController {
     @Autowired private RoomRepository roomRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private SeatingAllocatorService seatingAllocatorService;
+    @Autowired private SeatAllocationRepository seatAllocationRepository;
+    @Autowired private com.acadex.service.StudentRiskService studentRiskService;
+    @Autowired private com.acadex.repository.CourseRepository courseRepository;
+    @Autowired private com.acadex.repository.CourseTopicRepository courseTopicRepository;
+    @Autowired private com.acadex.repository.AttendanceRecordRepository attendanceRecordRepository;
+    @Autowired private com.acadex.repository.TeacherScoreRepository teacherScoreRepository;
 
     // ========== User Management ==========
 
@@ -203,6 +210,52 @@ public class AdminController {
         }
         analytics.put("examsByStatus", examStatus);
 
+        // Course progress
+        var courses = courseRepository.findAll();
+        double totalCoverage = 0;
+        List<Map<String, Object>> courseProgress = new ArrayList<>();
+        for (var c : courses) {
+            long total = courseTopicRepository.countByCourseId(c.getId());
+            long completed = courseTopicRepository.countByCourseIdAndCompleted(c.getId(), true);
+            double coverage = total > 0 ? (completed * 100.0 / total) : 0;
+            totalCoverage += coverage;
+            Map<String, Object> cp = new HashMap<>();
+            cp.put("courseId", c.getId());
+            cp.put("courseName", c.getCourseName());
+            cp.put("coveragePercentage", Math.round(coverage * 10.0) / 10.0);
+            courseProgress.add(cp);
+        }
+        analytics.put("courseProgress", courseProgress);
+        analytics.put("averageSyllabusCoverage", courses.isEmpty() ? 0 :
+                Math.round((totalCoverage / courses.size()) * 10.0) / 10.0);
+
+        // Faculty credibility scores
+        var teacherScores = teacherScoreRepository.findAll();
+        analytics.put("facultyCredibilityScores", teacherScores.stream().map(ts -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("facultyId", ts.getTeacherId());
+            m.put("credibilityScore", ts.getCredibilityScore());
+            m.put("riskLevel", ts.getRiskLevel());
+            m.put("low_trust_flag", ts.getCredibilityScore() < 60);
+            return m;
+        }).collect(Collectors.toList()));
+
+        // Attendance statistics
+        var allRecords = attendanceRecordRepository.findAll();
+        long totalRecords = allRecords.size();
+        long presentRecords = allRecords.stream()
+                .filter(r -> "present".equals(r.getStatus())).count();
+        analytics.put("attendanceStats", Map.of(
+            "totalRecords", totalRecords,
+            "presentCount", presentRecords,
+            "absentCount", totalRecords - presentRecords,
+            "overallPercentage", totalRecords > 0 ?
+                Math.round((presentRecords * 100.0 / totalRecords) * 10.0) / 10.0 : 0
+        ));
+
+        // Student risk distribution
+        analytics.put("studentRiskDistribution", studentRiskService.getRiskDistribution());
+
         return ResponseEntity.ok(analytics);
     }
 
@@ -258,7 +311,8 @@ public class AdminController {
                 request.getStrategy() != null ? request.getStrategy() : "ml_optimized"
         );
 
-        // Persist seat numbers back to registrations
+        // Persist seat numbers back to registrations + SeatAllocation entities
+        seatAllocationRepository.deleteByExamId(request.getExamId());
         Map<String, String> seatMap = result.getAssignments().stream()
                 .collect(Collectors.toMap(SeatAssignment::getStudentId, SeatAssignment::getSeatNumber, (a, b) -> a));
         for (ExamRegistration reg : regs) {
@@ -266,6 +320,18 @@ public class AdminController {
             if (seat != null) {
                 reg.setSeatNumber(seat);
                 registrationRepository.save(reg);
+
+                // Parse room
+                Long roomId2 = rooms.get(0).getId();
+                for (Room r : rooms) {
+                    if (seat.startsWith(r.getName())) { roomId2 = r.getId(); break; }
+                }
+                seatAllocationRepository.save(com.acadex.entity.SeatAllocation.builder()
+                        .examId(request.getExamId())
+                        .roomId(roomId2)
+                        .studentId(reg.getStudentId())
+                        .seatNumber(seat)
+                        .build());
             }
         }
 

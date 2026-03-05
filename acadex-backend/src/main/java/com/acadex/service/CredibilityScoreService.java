@@ -1,11 +1,20 @@
 package com.acadex.service;
 
-import com.acadex.entity.*;
-import com.acadex.repository.*;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import com.acadex.entity.AttendanceRecord;
+import com.acadex.entity.ClassSession;
+import com.acadex.entity.TeacherScore;
+import com.acadex.repository.AttendanceRecordRepository;
+import com.acadex.repository.ClassSessionRepository;
+import com.acadex.repository.CourseFacultyMappingRepository;
+import com.acadex.repository.CourseTopicRepository;
+import com.acadex.repository.SubjectRepository;
+import com.acadex.repository.TeacherScoreRepository;
+import com.acadex.repository.TopicVerificationRepository;
 
 /**
  * ML-Based Teacher Credibility Score Service
@@ -31,6 +40,8 @@ public class CredibilityScoreService {
     @Autowired private AttendanceRecordRepository attendanceRepo;
     @Autowired private TeacherScoreRepository teacherScoreRepo;
     @Autowired private SubjectRepository subjectRepository;
+    @Autowired private CourseFacultyMappingRepository courseFacultyMappingRepo;
+    @Autowired private CourseTopicRepository courseTopicRepo;
 
     /**
      * Recalculate credibility score for a teacher based on all their verified sessions.
@@ -84,11 +95,20 @@ public class CredibilityScoreService {
         double avgPartial = totalPartialPct / verifiedSessions;
         double avgAttendanceConsistency = attendanceConsistency / verifiedSessions;
 
-        // ΓöÇΓöÇ ML Credibility Formula ΓöÇΓöÇ
-        // credibility_score = (0.6 ├ù avg_yes_votes) + (0.2 ├ù attendance_consistency) + (0.2 ├ù complaint_inverse)
-        // complaint_inverse = 100 - avg_no_votes (inversely correlated with No votes)
-        double complaintInverse = Math.max(0, 100 - avgNo);
-        double credibilityScore = (0.6 * avgYes) + (0.2 * avgAttendanceConsistency) + (0.2 * complaintInverse);
+        // ── ML Credibility Formula ──
+        // credibility_score = (0.6 × positive_votes) + (0.2 × attendance_consistency) + (0.2 × syllabus_completion)
+        double syllabusCompletion = 100.0;
+        var facultyMappings = courseFacultyMappingRepo.findByFacultyId(teacherId);
+        if (!facultyMappings.isEmpty()) {
+            double totalCompletion = 0;
+            for (var mapping : facultyMappings) {
+                long totalTopics = courseTopicRepo.countByCourseId(mapping.getCourseId());
+                long completedTopics = courseTopicRepo.countByCourseIdAndCompleted(mapping.getCourseId(), true);
+                totalCompletion += (totalTopics > 0 ? (completedTopics * 100.0 / totalTopics) : 100.0);
+            }
+            syllabusCompletion = totalCompletion / facultyMappings.size();
+        }
+        double credibilityScore = (0.6 * avgYes) + (0.2 * avgAttendanceConsistency) + (0.2 * syllabusCompletion);
         credibilityScore = Math.round(credibilityScore * 10.0) / 10.0;
         credibilityScore = Math.max(0, Math.min(100, credibilityScore));
 
