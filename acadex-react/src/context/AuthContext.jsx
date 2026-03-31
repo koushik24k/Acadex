@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authService, userService } from '../services';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authService } from '../services';
 
 const AuthContext = createContext(null);
 
@@ -16,14 +16,61 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restore session from localStorage on reload
-    const savedRole = localStorage.getItem('mock_role');
-    const stored = authService.getUser();
-    if (savedRole && stored && authService.isAuthenticated()) {
-      setUser(stored);
-      setRole(savedRole);
-    }
-    setLoading(false);
+    let isMounted = true;
+
+    const normalizeRole = (value) => {
+      if (!value) return null;
+      if (typeof value === 'string') return value.toLowerCase();
+      if (typeof value === 'object' && value.role) return String(value.role).toLowerCase();
+      return null;
+    };
+
+    const initSession = async () => {
+      try {
+        const hasToken = authService.isAuthenticated();
+        const storedUser = authService.getUser();
+        const savedRole = localStorage.getItem('role') || localStorage.getItem('mock_role');
+
+        if (hasToken && storedUser) {
+          const derivedRole =
+            normalizeRole(savedRole) ||
+            normalizeRole(Array.isArray(storedUser.roles) ? storedUser.roles[0] : null) ||
+            'student';
+
+          if (isMounted) {
+            setUser(storedUser);
+            setRole(derivedRole);
+          }
+          return;
+        }
+
+        // Fallback recovery when token exists but local user cache is missing/corrupt
+        if (hasToken) {
+          const session = await authService.getSession();
+          const sessionUser = session?.user;
+          if (sessionUser?.id && isMounted) {
+            const derivedRole =
+              normalizeRole(savedRole) ||
+              normalizeRole(Array.isArray(sessionUser.roles) ? sessionUser.roles[0] : null) ||
+              'student';
+
+            localStorage.setItem('user', JSON.stringify(sessionUser));
+            localStorage.setItem('role', derivedRole);
+            setUser(sessionUser);
+            setRole(derivedRole);
+          }
+        }
+      } catch {
+        // Ignore restore failures; user can log in again.
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    initSession();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Dev mode: pick a role → auto-login to backend with seeded credentials
@@ -31,9 +78,9 @@ export function AuthProvider({ children }) {
     const creds = DEV_CREDENTIALS[newRole];
     if (!creds) return;
     try {
-      const { user: u } = await authService.login(creds.email, creds.password);
+      const { user: u, role: backendRole } = await authService.login(creds.email, creds.password);
       setUser(u);
-      setRole(newRole);
+      setRole(String(backendRole || newRole).toLowerCase());
       localStorage.setItem('mock_role', newRole);
     } catch (err) {
       console.error('Dev auto-login failed:', err);
@@ -41,12 +88,13 @@ export function AuthProvider({ children }) {
   };
 
   const login = async (email, password) => {
-    const { user: u } = await authService.login(email, password);
+    const { user: u, role: backendRole } = await authService.login(email, password);
     setUser(u);
-    const roles = await userService.getRoles(u.id);
-    const r = roles?.[0]?.role || 'student';
-    setRole(r);
-    return r;
+
+    const finalRole = String(backendRole || u?.roles?.[0] || 'student').toLowerCase();
+    localStorage.setItem('role', finalRole);
+    setRole(finalRole);
+    return finalRole;
   };
 
   const logout = () => {

@@ -1,34 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { assignmentService } from '../../services';
+import { assignmentService, courseService } from '../../services';
+import { useAuth } from '../../context/AuthContext';
 
 export default function FacultyEditAssignment() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [tab, setTab] = useState('details');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submissions, setSubmissions] = useState([]);
-  const [form, setForm] = useState({ title: '', description: '', subject: '', dueDate: '', maxMarks: 100, status: 'draft' });
+  const [courses, setCourses] = useState([]);
+  const [form, setForm] = useState({ title: '', description: '', subject: '', courseId: '', dueDate: '', maxMarks: 100, status: 'draft' });
 
   useEffect(() => {
     Promise.all([
       assignmentService.get(id),
       assignmentService.getSubmissions(id, {}).catch(() => []),
     ]).then(([a, subs]) => {
-      if (a) setForm({ title: a.title || '', description: a.description || '', subject: a.subject || '', dueDate: a.dueDate || '', maxMarks: a.maxMarks || 100, status: a.status || 'draft' });
+      if (a) setForm({ title: a.title || '', description: a.description || '', subject: a.subject || '', courseId: a.courseId || '', dueDate: a.dueDate || '', maxMarks: a.maxMarks || 100, status: a.status || 'draft' });
       setSubmissions(Array.isArray(subs) ? subs : []);
       setLoading(false);
     });
   }, [id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      courseService.list({ facultyId: user.id })
+        .then((data) => setCourses(Array.isArray(data) ? data : []))
+        .catch(() => setCourses([]));
+    }
+  }, [user]);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await assignmentService.update(id, { ...form, maxMarks: parseInt(form.maxMarks) });
+      await assignmentService.update(id, { ...form, courseId: form.courseId ? Number(form.courseId) : null, maxMarks: parseInt(form.maxMarks) });
       navigate('/faculty/assignments');
     } catch (err) { alert(err.response?.data?.error || 'Failed'); }
     finally { setSaving(false); }
@@ -47,6 +58,15 @@ export default function FacultyEditAssignment() {
       {tab === 'details' && (
         <div className="bg-white rounded-xl shadow-sm border p-6 max-w-2xl space-y-4">
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Title</label><input name="title" value={form.title} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none" /></div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+            <select name="courseId" value={form.courseId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none">
+              <option value="">Select course</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.courseName || c.name || `Course ${c.id}`}</option>
+              ))}
+            </select>
+          </div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Subject</label><input name="subject" value={form.subject} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none" /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea name="description" value={form.description} onChange={handleChange} rows={4} className="w-full px-4 py-2 border rounded-lg outline-none" /></div>
           <div className="grid grid-cols-3 gap-4">

@@ -29,6 +29,9 @@ public class UserRole {
 
     private String department;
 
+    @Column(name = "section")
+    private String section;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

@@ -10,8 +10,8 @@ export default function AdminUsers() {
   const [showCreate, setShowCreate] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student', department: '' });
-  const [bulkForm, setBulkForm] = useState({ startRollNumber: '', endRollNumber: '', emailPattern: '{rollno}@student.edu', namePattern: 'Student {rollno}', department: '', defaultPassword: 'password123' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student', department: '', section: '' });
+  const [bulkForm, setBulkForm] = useState({ startRollNumber: '', endRollNumber: '', emailPattern: '{rollno}@student.edu', namePattern: 'Student {rollno}', department: '', section: '', defaultPassword: 'password123' });
   const [bulkResult, setBulkResult] = useState(null);
 
   const fetchUsers = () => {
@@ -32,7 +32,7 @@ export default function AdminUsers() {
     try {
       await adminUserService.create(form);
       setShowCreate(false);
-      setForm({ name: '', email: '', password: '', role: 'student', department: '' });
+      setForm({ name: '', email: '', password: '', role: 'student', department: '', section: '' });
       fetchUsers();
     } catch (err) { alert(err.response?.data?.error || 'Failed'); }
   };
@@ -53,8 +53,36 @@ export default function AdminUsers() {
 
   const handleBulkCreate = async () => {
     try {
-      const result = await adminUserService.bulkCreate(bulkForm);
+      // Extract the numeric range from roll numbers (e.g., CS001 -> 1, CS050 -> 50)
+      const startMatch = bulkForm.startRollNumber.match(/(\d+)/);
+      const endMatch = bulkForm.endRollNumber.match(/(\d+)/);
+      
+      if (!startMatch || !endMatch) {
+        alert('Invalid roll number format. Use format like CS001 to CS050');
+        return;
+      }
+
+      const startNum = parseInt(startMatch[1]);
+      const endNum = parseInt(endMatch[1]);
+      const prefix = bulkForm.startRollNumber.replace(/\d+/, ''); // Extract non-numeric prefix
+
+      const users = [];
+      for (let i = startNum; i <= endNum; i++) {
+        const rollNum = prefix + String(i).padStart(String(startNum).length, '0');
+        users.push({
+          name: bulkForm.namePattern.replace('{rollno}', rollNum),
+          email: bulkForm.emailPattern.replace('{rollno}', rollNum),
+          password: bulkForm.defaultPassword,
+          role: 'student',
+          department: bulkForm.department,
+          section: bulkForm.section
+        });
+      }
+
+      const result = await adminUserService.bulkCreate(users);
       setBulkResult(result);
+      setShowBulk(false);
+      setBulkForm({ startRollNumber: '', endRollNumber: '', emailPattern: '{rollno}@student.edu', namePattern: 'Student {rollno}', department: '', section: '', defaultPassword: 'password123' });
       fetchUsers();
     } catch (err) { alert(err.response?.data?.error || 'Failed'); }
   };
@@ -90,6 +118,7 @@ export default function AdminUsers() {
               <option value="student">Student</option><option value="faculty">Faculty</option><option value="admin">Admin</option>
             </select>
             <input name="department" value={form.department} onChange={handleChange} placeholder="Department" className="px-3 py-2 border rounded-lg outline-none" />
+            <input name="section" value={form.section} onChange={handleChange} placeholder="Section (e.g. A)" className="px-3 py-2 border rounded-lg outline-none" />
           </div>
           <div className="flex space-x-2 mt-4">
             <button onClick={handleCreate} className="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm">Create</button>
@@ -108,6 +137,7 @@ export default function AdminUsers() {
             <input value={bulkForm.emailPattern} onChange={(e) => setBulkForm((f) => ({ ...f, emailPattern: e.target.value }))} placeholder="Email Pattern" className="px-3 py-2 border rounded-lg outline-none" />
             <input value={bulkForm.namePattern} onChange={(e) => setBulkForm((f) => ({ ...f, namePattern: e.target.value }))} placeholder="Name Pattern" className="px-3 py-2 border rounded-lg outline-none" />
             <input value={bulkForm.department} onChange={(e) => setBulkForm((f) => ({ ...f, department: e.target.value }))} placeholder="Department" className="px-3 py-2 border rounded-lg outline-none" />
+            <input value={bulkForm.section} onChange={(e) => setBulkForm((f) => ({ ...f, section: e.target.value }))} placeholder="Section (e.g. A)" className="px-3 py-2 border rounded-lg outline-none" />
             <input value={bulkForm.defaultPassword} onChange={(e) => setBulkForm((f) => ({ ...f, defaultPassword: e.target.value }))} placeholder="Default Password" className="px-3 py-2 border rounded-lg outline-none" />
           </div>
           <div className="flex space-x-2 mt-4">
@@ -116,7 +146,12 @@ export default function AdminUsers() {
           </div>
           {bulkResult && (
             <div className="mt-4 p-4 bg-green-50 rounded-lg">
-              <p className="text-sm">Created: {bulkResult.summary?.created || 0} | Skipped: {bulkResult.summary?.skipped || 0} | Errors: {bulkResult.summary?.errors || 0}</p>
+              <p className="text-sm">Created: {bulkResult.created || 0} | Errors: {bulkResult.errors?.length || 0}</p>
+              {bulkResult.errors && bulkResult.errors.length > 0 && (
+                <div className="mt-2 text-xs text-red-700">
+                  {bulkResult.errors.map((err, i) => <div key={i}>{err}</div>)}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -133,6 +168,7 @@ export default function AdminUsers() {
               <option value="student">Student</option><option value="faculty">Faculty</option><option value="admin">Admin</option>
             </select>
             <input name="department" value={form.department} onChange={handleChange} placeholder="Department" className="px-3 py-2 border rounded-lg outline-none" />
+            <input name="section" value={form.section} onChange={handleChange} placeholder="Section (e.g. A)" className="px-3 py-2 border rounded-lg outline-none" />
           </div>
           <div className="flex space-x-2 mt-4">
             <button onClick={handleUpdate} className="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm">Save</button>
@@ -169,7 +205,20 @@ export default function AdminUsers() {
                     ))}
                   </td>
                   <td className="py-3 px-4 space-x-2">
-                    <button onClick={() => { setEditUser(u); setForm({ name: u.name, email: u.email, password: '', role: u.roles?.[0]?.role || 'student', department: u.roles?.[0]?.department || '' }); setShowCreate(false); setShowBulk(false); }} className="text-rose-600 hover:underline text-xs">Edit</button>
+                    <button onClick={() => {
+                      const roleInfo = Array.isArray(u.roleDetails) ? u.roleDetails[0] : null;
+                      setEditUser(u);
+                      setForm({
+                        name: u.name,
+                        email: u.email,
+                        password: '',
+                        role: roleInfo?.role || u.roles?.[0]?.role || u.roles?.[0] || 'student',
+                        department: roleInfo?.department || u.roles?.[0]?.department || '',
+                        section: roleInfo?.section || u.roles?.[0]?.section || ''
+                      });
+                      setShowCreate(false);
+                      setShowBulk(false);
+                    }} className="text-rose-600 hover:underline text-xs">Edit</button>
                     <button onClick={() => handleDelete(u.id)} className="text-red-600 hover:underline text-xs">Delete</button>
                   </td>
                 </tr>

@@ -3,15 +3,16 @@ import api from './api';
 export const authService = {
   async login(email, password) {
     const res = await api.post('/auth/login', { email, password });
-    const { token, id, name, email: userEmail, roles } = res.data;
+    const { token, role, id, name, email: userEmail, roles } = res.data;
     const user = { id, name, email: userEmail, roles };
     if (token) localStorage.setItem('auth_token', token);
+    if (role) localStorage.setItem('role', role);
     if (user && user.id) localStorage.setItem('user', JSON.stringify(user));
-    return { token, user };
+    return { token, role, user };
   },
 
-  async register(name, email, password) {
-    const res = await api.post('/auth/register', { name, email, password });
+  async register(name, email, password, role = 'student', department = 'General') {
+    const res = await api.post('/auth/register', { name, email, password, role, department });
     return res.data;
   },
 
@@ -22,6 +23,7 @@ export const authService = {
 
   logout() {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('role');
     localStorage.removeItem('user');
   },
 
@@ -91,6 +93,7 @@ export const resultService = {
 
 export const assignmentService = {
   list: (params) => api.get('/assignments', { params }).then((r) => r.data),
+  listMy: (params) => api.get('/assignments/my', { params }).then((r) => r.data),
   get: (id) => api.get(`/assignments/${id}`).then((r) => r.data),
   create: (data) => api.post('/assignments', data).then((r) => r.data),
   update: (id, data) => api.put('/assignments', data, { params: { id } }).then((r) => r.data),
@@ -153,10 +156,29 @@ export const attendanceService = {
   getMy: (params) => api.get('/attendance/my', { params }).then((r) => r.data),
   getMyMonthly: (params) => api.get('/attendance/my/monthly', { params }).then((r) => r.data),
   getSummary: (subjectId) => api.get(`/attendance/summary/${subjectId}`).then((r) => r.data),
+  getMyScheduledSubjects: (_facultyId, params) => api.get('/attendance/my-scheduled-subjects', { params }).then((r) => r.data),
   getShortage: (params) => api.get('/attendance/shortage', { params }).then((r) => r.data),
   lock: (params) => api.post('/attendance/lock', null, { params }).then((r) => r.data),
   getStats: (params) => api.get('/attendance/stats', { params }).then((r) => r.data),
   getStudents: (params) => api.get('/attendance/students', { params }).then((r) => r.data),
+};
+
+export const analyticsService = {
+    getDashboard: () => api.get('/analytics/dashboard').then(r => r.data),
+    getAttendanceTrends: () => api.get('/analytics/attendance-trends').then(r => r.data),
+    getCourseCompletion: () => api.get('/analytics/course-completion').then(r => r.data),
+    getFacultyPerformance: () => api.get('/analytics/faculty-performance').then(r => r.data),
+    getStudentRisk: (studentId) => api.get('/analytics/student-risk', { params: { studentId } }).then(r => r.data),
+};
+
+export const timetableService = {
+    list: (params) => api.get('/timetable', { params }).then((r) => r.data),
+    get: (id) => api.get(`/timetable/${id}`).then((r) => r.data),
+    create: (data) => api.post('/timetable', data).then((r) => r.data),
+    update: (id, data) => api.put(`/timetable/${id}`, data).then((r) => r.data),
+    remove: (id) => api.delete(`/timetable/${id}`).then((r) => r.data),
+    getForFaculty: (facultyId) => api.get(`/timetable/faculty/${facultyId}`).then((r) => r.data),
+    getForCourse: (courseId) => api.get(`/timetable/course/${courseId}`).then((r) => r.data),
 };
 
 export const topicService = {

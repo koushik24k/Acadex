@@ -10,5 +10,7 @@ import com.acadex.entity.CourseFacultyMapping;
 public interface CourseFacultyMappingRepository extends JpaRepository<CourseFacultyMapping, Long> {
     List<CourseFacultyMapping> findByCourseId(Long courseId);
     List<CourseFacultyMapping> findByFacultyId(String facultyId);
+    List<CourseFacultyMapping> findByCourseIdAndFacultyId(Long courseId, String facultyId);
     Optional<CourseFacultyMapping> findByCourseIdAndFacultyIdAndSection(Long courseId, String facultyId, String section);
+    boolean existsByCourseIdAndFacultyId(Long courseId, String facultyId);
 }

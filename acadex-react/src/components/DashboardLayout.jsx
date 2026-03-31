@@ -2,30 +2,45 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { notificationService } from '../services';
+import {
+  Bell,
+  Home,
+  Users,
+  BookOpen,
+  CheckSquare,
+  BarChart2,
+  Settings,
+  LogOut,
+  FileText,
+  Calendar,
+  AlertTriangle,
+} from 'lucide-react';
 
 const navItems = {
   admin: [
     { label: 'Dashboard', path: '/admin/dashboard' },
-    { label: 'Analytics', path: '/admin/analytics' },
+    { label: 'Analytics', path: '/admin/analytics', icon: BarChart2 },
     { label: 'Exams', path: '/admin/exams' },
     { label: 'Rooms', path: '/admin/rooms' },
-    { label: 'Seat Allocation', path: '/admin/seat-allocation' },
+    { label: 'Seat Allocation', path: '/admin/seat-allocation', icon: Users },
     { label: 'Users', path: '/admin/users' },
-    { label: 'Attendance', path: '/admin/attendance' },
+    { label: 'Attendance', path: '/admin/attendance', icon: CheckSquare },
     { label: 'Courses', path: '/admin/courses' },
+    { label: 'Timetable', path: '/admin/timetable', icon: Calendar },
+    { label: 'Student Risk', path: '/admin/student-risk', icon: AlertTriangle },
   ],
   faculty: [
-    { label: 'Dashboard', path: '/faculty/dashboard' },
+    { label: 'Dashboard', path: '/faculty/dashboard', icon: Home },
     { label: 'Exams', path: '/faculty/exams' },
     { label: 'Assignments', path: '/faculty/assignments' },
     { label: 'Exam Grading', path: '/faculty/grading' },
     { label: 'Assignment Grading', path: '/faculty/assignments/grade' },
-    { label: 'Attendance', path: '/faculty/attendance' },
     { label: 'Courses', path: '/faculty/courses' },
   ],
   student: [
     { label: 'Dashboard', path: '/student/dashboard' },
     { label: 'Exams', path: '/student/exams' },
+    { label: 'Assignments', path: '/student/assignments' },
     { label: 'Results', path: '/student/results' },
     { label: 'Notifications', path: '/student/notifications' },
     { label: 'Attendance', path: '/student/attendance' },
@@ -87,7 +102,7 @@ export default function DashboardLayout({ children, role }) {
   useEffect(() => {
     notificationService.list({ isRead: false, limit: 5 })
       .then((data) => {
-        setUnreadCount(Array.isArray(data) ? data.length : 0);
+        setUnreadCount(Array.isArray(data) ? data.filter((n) => !n.isRead).length : 0);
       })
       .catch(() => {});
   }, []);

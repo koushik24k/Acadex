@@ -18,16 +18,21 @@ export default function StudentTakeExam() {
   const timerRef = useRef(null);
 
   useEffect(() => {
+    console.log('StudentTakeExam mounted with examId:', id);
     Promise.all([
       examService.get(id),
       questionService.list(id),
     ]).then(([examData, questionsData]) => {
+      console.log('Exam data:', examData);
+      console.log('Questions data:', questionsData);
       setExam(examData);
       const qs = Array.isArray(questionsData) ? questionsData : [];
+      console.log('Processed questions:', qs);
       setQuestions(qs);
       setTimeLeft((examData.duration || 60) * 60);
       setLoading(false);
-    }).catch(() => {
+    }).catch((err) => {
+      console.error('Failed to load exam:', err);
       alert('Failed to load exam');
       navigate('/student/exams');
     });
@@ -99,6 +104,7 @@ export default function StudentTakeExam() {
   const q = questions[currentQ];
   const answered = Object.keys(answers).filter((k) => answers[k]).length;
   const isLowTime = timeLeft < 300;
+  console.log('Render state - currentQ:', currentQ, 'questions.length:', questions.length, 'q:', q, 'showingNextButton:', currentQ < questions.length - 1);
 
   return (
     <DashboardLayout role="student">
@@ -149,11 +155,11 @@ export default function StudentTakeExam() {
 
               {/* Navigation */}
               <div className="flex justify-between mt-6 pt-4 border-t">
-                <button onClick={() => setCurrentQ(Math.max(0, currentQ - 1))} disabled={currentQ === 0} className="flex items-center px-4 py-2 text-sm text-gray-600 border rounded-lg disabled:opacity-40">
+                <button onClick={() => {console.log('Previous clicked, currentQ:', currentQ); setCurrentQ(Math.max(0, currentQ - 1));}} disabled={currentQ === 0} className="flex items-center px-4 py-2 text-sm text-gray-600 border rounded-lg disabled:opacity-40">
                   <ChevronLeft className="w-4 h-4 mr-1" /> Previous
                 </button>
                 {currentQ < questions.length - 1 ? (
-                  <button onClick={() => setCurrentQ(currentQ + 1)} className="flex items-center px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg">
+                  <button onClick={() => {console.log('Next clicked, currentQ:', currentQ, 'questions.length:', questions.length); setCurrentQ(currentQ + 1);}} className="flex items-center px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg">
                     Next <ChevronRight className="w-4 h-4 ml-1" />
                   </button>
                 ) : (

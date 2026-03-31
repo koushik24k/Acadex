@@ -21,14 +21,14 @@ export default function StudentNotifications() {
   const handleMarkRead = async (id) => {
     try {
       await notificationService.markRead(id);
-      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
     } catch {}
   };
 
   const handleMarkAllRead = async () => {
     try {
       await notificationService.markAllRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch {}
   };
 
@@ -40,12 +40,12 @@ export default function StudentNotifications() {
   };
 
   const filtered = notifications.filter((n) => {
-    if (tab === 'unread') return !n.read;
-    if (tab === 'read') return n.read;
+    if (tab === 'unread') return !n.isRead;
+    if (tab === 'read') return n.isRead;
     return true;
   });
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const formatDate = (d) => {
     try {
@@ -97,14 +97,14 @@ export default function StudentNotifications() {
       ) : (
         <div className="space-y-2">
           {filtered.map((n) => (
-            <div key={n.id} className={`bg-white rounded-xl shadow-sm border p-4 flex items-start space-x-4 transition ${!n.read ? 'border-l-4 border-l-indigo-500' : ''}`}>
+            <div key={n.id} className={`bg-white rounded-xl shadow-sm border p-4 flex items-start space-x-4 transition ${!n.isRead ? 'border-l-4 border-l-indigo-500' : ''}`}>
               <div className={`mt-0.5 ${typeIcon(n.type)}`}>
-                {n.read ? <MailOpen className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
+                {n.isRead ? <MailOpen className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className={`text-sm ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{n.title}</p>
+                    <p className={`text-sm ${!n.isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{n.title}</p>
                     <p className="text-sm text-gray-500 mt-0.5">{n.message}</p>
                   </div>
                   <span className="text-xs text-gray-400 whitespace-nowrap">{formatDate(n.createdAt)}</span>
@@ -112,7 +112,7 @@ export default function StudentNotifications() {
                 {n.type && <span className="inline-block mt-2 px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded">{n.type}</span>}
               </div>
               <div className="flex items-center space-x-1">
-                {!n.read && (
+                {!n.isRead && (
                   <button onClick={() => handleMarkRead(n.id)} className="p-1.5 text-gray-400 hover:text-indigo-600 rounded" title="Mark as read">
                     <Check className="w-4 h-4" />
                   </button>

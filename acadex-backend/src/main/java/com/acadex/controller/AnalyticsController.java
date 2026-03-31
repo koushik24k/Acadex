@@ -5,9 +5,13 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.acadex.entity.AttendanceRecord;
 import com.acadex.entity.Course;
 import com.acadex.entity.TeacherScore;
+import com.acadex.entity.User;
 import com.acadex.entity.UserRole;
 import com.acadex.repository.AttendanceRecordRepository;
 import com.acadex.repository.CourseRepository;
@@ -56,6 +61,7 @@ public class AnalyticsController {
     // ══════════════════════════════════════════
 
     @GetMapping("/dashboard")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> getDashboard() {
         Map<String, Object> dashboard = new LinkedHashMap<>();
 
@@ -144,11 +150,47 @@ public class AnalyticsController {
         return ResponseEntity.ok(dashboard);
     }
 
+    @GetMapping("/attendance-trends")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> getAttendanceTrends() {
+        // Aggregate attendance by month
+        List<AttendanceRecord> allRecords = attendanceRecordRepository.findAll();
+        Map<String, List<AttendanceRecord>> byMonth = allRecords.stream()
+                .collect(Collectors.groupingBy(r -> r.getDate().getYear() + "-" + String.format("%02d", r.getDate().getMonthValue())));
+
+        List<Map<String, Object>> monthlyStats = new ArrayList<>();
+        byMonth.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            List<AttendanceRecord> recs = entry.getValue();
+            long total = recs.size();
+            long present = recs.stream().filter(r -> "present".equals(r.getStatus())).count();
+            double pct = total > 0 ? Math.round((present * 100.0 / total)) : 0;
+            monthlyStats.add(Map.of("month", entry.getKey(), "percentage", pct, "total", total, "present", present));
+        });
+
+        return ResponseEntity.ok(monthlyStats);
+    }
+
+    @GetMapping("/course-completion")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HOD')")
+    public ResponseEntity<?> getCourseCompletionStats() {
+        long draft = courseRepository.findByStatus("Draft").size();
+        long published = courseRepository.findByStatus("Published").size();
+        long locked = courseRepository.findByStatus("Locked").size();
+
+        List<Map<String, Object>> completionStats = new ArrayList<>();
+        completionStats.add(Map.of("name", "Draft", "value", draft));
+        completionStats.add(Map.of("name", "Published", "value", published));
+        completionStats.add(Map.of("name", "Locked", "value", locked));
+
+        return ResponseEntity.ok(completionStats);
+    }
+
     // ══════════════════════════════════════════
     //  GET /api/analytics/faculty-performance
     // ══════════════════════════════════════════
 
     @GetMapping("/faculty-performance")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HOD')")
     public ResponseEntity<?> getFacultyPerformance() {
         // Recalculate all scores
         List<UserRole> facultyRoles = userRoleRepository.findByRole("faculty");
@@ -183,10 +225,147 @@ public class AnalyticsController {
     // ══════════════════════════════════════════
 
     @GetMapping("/student-risk")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('HOD')")
     public ResponseEntity<?> getStudentRisk(@RequestParam(required = false) String studentId) {
         if (studentId != null && !studentId.isEmpty()) {
             return ResponseEntity.ok(studentRiskService.assessStudentRisk(studentId));
         }
         return ResponseEntity.ok(studentRiskService.assessAllStudents());
+    }
+
+    // ══════════════════════════════════════════
+    //  GET /api/analytics/hod/department-summary
+    //  HOD-specific read-only analytics
+    // ══════════════════════════════════════════
+
+    @GetMapping("/hod/department-summary")
+    @PreAuthorize("hasRole('HOD')")
+    public ResponseEntity<?> getDepartmentSummary(Authentication auth) {
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        User hod = userRepository.findByEmail(email).orElseThrow();
+        String department = hod.getRoles() != null && !hod.getRoles().isEmpty()
+                ? hod.getRoles().get(0).getDepartment() : null;
+
+        if (department == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "HOD department not found"));
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("department", department);
+        summary.put("hod", hod.getName());
+
+        // Courses in department
+        List<Course> courses = courseRepository.findByDepartment(department);
+        summary.put("totalCourses", courses.size());
+        summary.put("publishedCourses", courses.stream().filter(c -> "Published".equals(c.getStatus())).count());
+        summary.put("draftCourses", courses.stream().filter(c -> "Draft".equals(c.getStatus())).count());
+
+        // Students in department
+        List<UserRole> deptStudents = userRoleRepository.findAll().stream()
+                .filter(r -> "student".equals(r.getRole()) && department.equals(r.getDepartment()))
+                .collect(Collectors.toList());
+        summary.put("totalStudents", deptStudents.size());
+
+        // Faculty in department
+        List<UserRole> deptFaculty = userRoleRepository.findAll().stream()
+                .filter(r -> "faculty".equals(r.getRole()) && department.equals(r.getDepartment()))
+                .collect(Collectors.toList());
+        summary.put("totalFaculty", deptFaculty.size());
+
+        return ResponseEntity.ok(summary);
+    }
+
+    @GetMapping("/hod/attendance-overview")
+    @PreAuthorize("hasRole('HOD')")
+    public ResponseEntity<?> getHodAttendanceOverview(Authentication auth) {
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        User hod = userRepository.findByEmail(email).orElseThrow();
+        String department = hod.getRoles() != null && !hod.getRoles().isEmpty()
+                ? hod.getRoles().get(0).getDepartment() : null;
+
+        if (department == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "HOD department not found"));
+        }
+
+        // Get all students in department
+        List<UserRole> deptStudents = userRoleRepository.findAll().stream()
+                .filter(r -> "student".equals(r.getRole()) && department.equals(r.getDepartment()))
+                .collect(Collectors.toList());
+
+        List<Map<String, Object>> studentAttendance = new ArrayList<>();
+        long totalRecords = 0, totalPresent = 0;
+
+        for (UserRole sr : deptStudents) {
+            List<AttendanceRecord> records = attendanceRecordRepository.findByStudentId(sr.getUser().getId());
+            if (!records.isEmpty()) {
+                long present = records.stream().filter(r -> "present".equals(r.getStatus())).count();
+                double pct = Math.round((present * 100.0 / records.size()) * 10.0) / 10.0;
+                totalRecords += records.size();
+                totalPresent += present;
+
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("studentId", sr.getUser().getId());
+                entry.put("studentName", sr.getUser().getName());
+                entry.put("totalClasses", records.size());
+                entry.put("attendedClasses", present);
+                entry.put("percentage", pct);
+                entry.put("shortage", pct < 75);
+                studentAttendance.add(entry);
+            }
+        }
+
+        double overallPct = totalRecords > 0 ? Math.round((totalPresent * 100.0 / totalRecords) * 10.0) / 10.0 : 0;
+
+        return ResponseEntity.ok(Map.of(
+                "department", department,
+                "overallPercentage", overallPct,
+                "totalRecords", totalRecords,
+                "presentRecords", totalPresent,
+                "shortageCount", studentAttendance.stream().filter(s -> (Boolean) s.get("shortage")).count(),
+                "students", studentAttendance
+        ));
+    }
+
+    @GetMapping("/hod/faculty-credibility")
+    @PreAuthorize("hasRole('HOD')")
+    public ResponseEntity<?> getHodFacultyCredibility(Authentication auth) {
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        User hod = userRepository.findByEmail(email).orElseThrow();
+        String department = hod.getRoles() != null && !hod.getRoles().isEmpty()
+                ? hod.getRoles().get(0).getDepartment() : null;
+
+        if (department == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "HOD department not found"));
+        }
+
+        // Get faculty in department and their scores
+        List<UserRole> deptFaculty = userRoleRepository.findAll().stream()
+                .filter(r -> "faculty".equals(r.getRole()) && department.equals(r.getDepartment()))
+                .collect(Collectors.toList());
+
+        List<Map<String, Object>> facultyScores = new ArrayList<>();
+        for (UserRole fr : deptFaculty) {
+            String facultyId = fr.getUser().getId();
+            TeacherScore score = credibilityScoreService.recalculateScore(facultyId);
+
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("facultyId", facultyId);
+            entry.put("facultyName", fr.getUser().getName());
+            entry.put("credibilityScore", score.getCredibilityScore());
+            entry.put("riskLevel", score.getRiskLevel());
+            entry.put("lowTrustFlag", score.getCredibilityScore() < 60);
+            entry.put("sessionsVerified", score.getTotalSessionsVerified());
+            facultyScores.add(entry);
+        }
+
+        facultyScores.sort((a, b) -> Double.compare(
+                ((Number) b.get("credibilityScore")).doubleValue(),
+                ((Number) a.get("credibilityScore")).doubleValue()));
+
+        return ResponseEntity.ok(Map.of(
+                "department", department,
+                "facultyCount", facultyScores.size(),
+                "faculty", facultyScores
+        ));
     }
 }

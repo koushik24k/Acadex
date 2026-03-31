@@ -26,6 +26,10 @@ public class CourseFacultyMapping {
     @Column(nullable = false)
     private String section;
 
+    @Column(name = "role")
+    @Builder.Default
+    private String role = "FACULTY";
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

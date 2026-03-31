@@ -23,6 +23,7 @@ export default function AdminCourses() {
   const [topicForm, setTopicForm] = useState({ unitId: '', topicName: '', description: '', plannedDate: '' });
   const [assignFacultyId, setAssignFacultyId] = useState('');
   const [assignSection, setAssignSection] = useState('A');
+  const [assignRole, setAssignRole] = useState('FACULTY');
 
   useEffect(() => { loadCourses(); loadFaculties(); }, []);
   useEffect(() => { if (tab === 'risk') loadRisks(); }, [tab]);
@@ -87,8 +88,10 @@ export default function AdminCourses() {
 
   const assignFac = async () => {
     if (!assignFacultyId) return;
-    await courseService.assignFaculty(detailCourse.id, { facultyId: assignFacultyId, section: assignSection });
-    setAssignFacultyId(''); openDetail(detailCourse);
+    await courseService.assignFaculty(detailCourse.id, { facultyId: assignFacultyId, section: assignSection, role: assignRole });
+    setAssignFacultyId('');
+    setAssignRole('FACULTY');
+    openDetail(detailCourse);
   };
 
   const removeFac = async (mappingId) => {
@@ -241,7 +244,7 @@ export default function AdminCourses() {
             <div className="space-y-2">
               {detailData.faculty.map(f => (
                 <div key={f.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
-                  <span className="text-sm text-slate-700">{f.facultyName || f.facultyId} — Section {f.section}</span>
+                  <span className="text-sm text-slate-700">{f.facultyName || f.facultyId} — Section {f.section} — {f.role || 'FACULTY'}</span>
                   <button onClick={() => removeFac(f.id)} className="text-xs text-rose-400 hover:text-rose-600">Remove</button>
                 </div>
               ))}
@@ -254,6 +257,11 @@ export default function AdminCourses() {
               {faculties.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
             <input placeholder="Section" value={assignSection} onChange={e => setAssignSection(e.target.value)} className="w-24 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+            <select value={assignRole} onChange={e => setAssignRole(e.target.value)} className="w-40 px-3 py-2 rounded-lg border border-slate-200 text-sm">
+              <option value="FACULTY">Faculty</option>
+              <option value="COORDINATOR">Coordinator</option>
+              <option value="HOD">HOD</option>
+            </select>
             <button onClick={assignFac} className="px-4 py-2 bg-rose-500 text-white rounded-lg text-sm font-medium hover:bg-rose-600">Assign</button>
           </div>
         </div>

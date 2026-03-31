@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { courseService } from '../../services';
 import { useAuth } from '../../context/AuthContext';
 
 export default function FacultyCourses() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCourse, setSelectedCourse] = useState(null);
@@ -19,7 +21,13 @@ export default function FacultyCourses() {
     try {
       setLoading(true);
       const data = await courseService.list({ facultyId: user?.id });
-      setCourses(data);
+      const assigned = Array.isArray(data) ? data : [];
+      if (assigned.length > 0) {
+        setCourses(assigned);
+      } else {
+        const fallback = await courseService.list({ status: 'Published' });
+        setCourses(Array.isArray(fallback) ? fallback : []);
+      }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
@@ -47,6 +55,10 @@ export default function FacultyCourses() {
     } finally { setCompleting(null); }
   };
 
+  const goToAttendanceForCourse = (courseId) => {
+    navigate(`/faculty/attendance?courseId=${courseId}&fromCourse=1`);
+  };
+
   if (loading) return (
     <DashboardLayout role="faculty">
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -66,6 +78,12 @@ export default function FacultyCourses() {
             <h1 className="text-xl font-bold text-slate-800">{detail.courseName}</h1>
             <p className="text-sm text-slate-500">{detail.courseCode} · {detail.department} · Sem {detail.semester} · {detail.credits} Credits</p>
           </div>
+          <button
+            onClick={() => goToAttendanceForCourse(detail.id)}
+            className="px-3 py-2 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition"
+          >
+            Take Attendance
+          </button>
           <span className={`text-xs px-3 py-1 rounded-full font-medium ${detail.status === 'Published' ? 'bg-emerald-50 text-emerald-700' : detail.status === 'Locked' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{detail.status}</span>
         </div>
 
@@ -191,6 +209,16 @@ export default function FacultyCourses() {
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">{c.completedTopics}/{c.totalTopics} topics completed</p>
                 </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToAttendanceForCourse(c.id);
+                  }}
+                  className="mt-3 w-full px-3 py-2 text-xs font-semibold rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 transition"
+                >
+                  Open Attendance by Timetable
+                </button>
               </div>
             ))}
           </div>

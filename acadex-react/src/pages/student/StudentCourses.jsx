@@ -17,7 +17,13 @@ export default function StudentCourses() {
     try {
       setLoading(true);
       const data = await courseService.list({ studentId: user?.id });
-      setCourses(data);
+      const enrolled = Array.isArray(data) ? data : [];
+      if (enrolled.length > 0) {
+        setCourses(enrolled);
+      } else {
+        const fallback = await courseService.list({ status: 'Published' });
+        setCourses(Array.isArray(fallback) ? fallback : []);
+      }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 

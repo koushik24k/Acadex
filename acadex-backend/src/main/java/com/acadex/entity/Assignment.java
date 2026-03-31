@@ -23,6 +23,12 @@ public class Assignment {
     @Column(name = "created_by", nullable = false)
     private String createdBy;
 
+    @Column(name = "course_id")
+    private Long courseId;
+
+    @Column(name = "faculty_id")
+    private String facultyId;
+
     @Column(name = "due_date")
     private String dueDate;
 

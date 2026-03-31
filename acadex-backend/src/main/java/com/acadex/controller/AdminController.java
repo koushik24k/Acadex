@@ -1,5 +1,6 @@
 package com.acadex.controller;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -78,7 +79,7 @@ public class AdminController {
 
         if (role != null) {
             users = users.stream()
-                    .filter(u -> u.getRoles() != null && u.getRoles().stream().anyMatch(r -> role.equals(r.getRole())))
+                    .filter(u -> u.getRoles() != null && u.getRoles().stream().anyMatch(r -> role.equalsIgnoreCase(r.getRole())))
                     .collect(Collectors.toList());
         }
 
@@ -91,6 +92,15 @@ public class AdminController {
             m.put("roles", u.getRoles() != null
                     ? u.getRoles().stream().map(UserRole::getRole).collect(Collectors.toList())
                     : List.of());
+            m.put("roleDetails", u.getRoles() != null
+                    ? u.getRoles().stream().map(r -> {
+                        Map<String, Object> rd = new HashMap<>();
+                        rd.put("role", r.getRole());
+                        rd.put("department", r.getDepartment());
+                        rd.put("section", r.getSection());
+                        return rd;
+                    }).collect(Collectors.toList())
+                    : List.of());
             return m;
         }).collect(Collectors.toList());
 
@@ -99,6 +109,9 @@ public class AdminController {
 
     @PostMapping("/users")
     public ResponseEntity<?> createUser(@RequestBody RegisterRequest request) {
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Password is required"));
+        }
         if (userRepository.existsByEmail(request.getEmail())) {
             return ResponseEntity.badRequest().body(ApiResponse.error("Email already exists"));
         }
@@ -115,6 +128,7 @@ public class AdminController {
                 .user(user)
                 .role(request.getRole() != null ? request.getRole() : "student")
                 .department(request.getDepartment())
+            .section(request.getSection())
                 .build();
         userRoleRepository.save(role);
 
@@ -142,6 +156,7 @@ public class AdminController {
                     .user(user)
                     .role(req.getRole() != null ? req.getRole() : "student")
                     .department(req.getDepartment())
+                    .section(req.getSection())
                     .build();
             userRoleRepository.save(role);
             created++;
@@ -156,7 +171,12 @@ public class AdminController {
 
         if (body.containsKey("name")) user.setName((String) body.get("name"));
         if (body.containsKey("email")) user.setEmail((String) body.get("email"));
-        if (body.containsKey("password")) user.setPassword(passwordEncoder.encode((String) body.get("password")));
+        if (body.containsKey("password")) {
+            String newPassword = (String) body.get("password");
+            if (newPassword != null && !newPassword.isBlank()) {
+                user.setPassword(passwordEncoder.encode(newPassword));
+            }
+        }
         userRepository.save(user);
 
         if (body.containsKey("role")) {
@@ -165,6 +185,7 @@ public class AdminController {
                     .user(user)
                     .role((String) body.get("role"))
                     .department((String) body.get("department"))
+                    .section((String) body.get("section"))
                     .build();
             userRoleRepository.save(role);
         }
@@ -270,10 +291,39 @@ public class AdminController {
             return ResponseEntity.badRequest().body(ApiResponse.error("At least one room is required"));
         }
 
-        // Fetch registrations
+        Optional<Exam> examOpt = examRepository.findById(request.getExamId());
+        if (examOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Exam not found"));
+        }
+
+        // Fetch registrations. If none exist, bootstrap from all student users.
         List<ExamRegistration> regs = registrationRepository.findByExamId(request.getExamId());
         if (regs.isEmpty()) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("No registrations found for this exam"));
+            Exam exam = examOpt.get();
+            List<UserRole> studentRoles = userRoleRepository.findByRole("student");
+            if (studentRoles.isEmpty()) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("No students found to allocate"));
+            }
+
+            List<ExamRegistration> bootstrapRegs = studentRoles.stream()
+                    .map(UserRole::getUser)
+                    .filter(Objects::nonNull)
+                    .map(u -> ExamRegistration.builder()
+                            .exam(exam)
+                            .studentId(u.getId())
+                            .registrationStatus("approved")
+                            .eligibilityChecked(true)
+                            .enrollmentStatus("enrolled")
+                            .registeredAt(LocalDateTime.now().toString())
+                            .build())
+                    .collect(Collectors.toList());
+
+            registrationRepository.saveAll(bootstrapRegs);
+            regs = registrationRepository.findByExamId(request.getExamId());
+
+            if (regs.isEmpty()) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("No registrations found for this exam"));
+            }
         }
 
         // Fetch rooms

@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/DashboardLayout';
-import { subjectService, attendanceService, topicService } from '../../services';
+import { attendanceService, topicService } from '../../services';
 
 export default function FacultyAttendance() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const courseId = searchParams.get('courseId');
+  const fromCourse = searchParams.get('fromCourse') === '1';
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -19,14 +23,49 @@ export default function FacultyAttendance() {
   const [saved, setSaved] = useState(false);
   const [tab, setTab] = useState('mark'); // mark | summary
   const [summary, setSummary] = useState(null);
+  const [courseScopedMode, setCourseScopedMode] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
-      subjectService.list({ facultyId: user.id }).then(setSubjects).catch(() => {});
-      attendanceService.getStudents({}).then(setStudents).catch(() => {});
+      const params = { date: selectedDate };
+      if (courseId) params.courseId = Number(courseId);
+
+      attendanceService.getMyScheduledSubjects(user.id, params).then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setSubjects(list);
+        setCourseScopedMode(Boolean(courseId));
+
+        if (fromCourse && list.length === 1) {
+          setSelectedSubject(String(list[0].id));
+        }
+        if (selectedSubject && !list.some((s) => s.id === Number(selectedSubject))) {
+          setSelectedSubject(null);
+        }
+      }).catch(() => {});
       setLoading(false);
     }
-  }, [user]);
+  }, [user, selectedDate, courseId, fromCourse]);
+
+  useEffect(() => {
+    if (!selectedSubject) {
+      setStudents([]);
+      setAttendance({});
+      setExistingRecords([]);
+      return;
+    }
+
+    const selected = subjects.find((s) => s.id === Number(selectedSubject));
+    const params = { subjectId: Number(selectedSubject) };
+    if (selected?.department) params.department = selected.department;
+    if (selected?.section) params.section = selected.section;
+
+    attendanceService.getStudents(params)
+      .then((list) => {
+        const nextStudents = Array.isArray(list) ? list : [];
+        setStudents(nextStudents);
+      })
+      .catch(() => setStudents([]));
+  }, [selectedSubject, subjects]);
 
   // Load topics when subject changes
   useEffect(() => {
@@ -129,6 +168,12 @@ export default function FacultyAttendance() {
         </div>
       </div>
 
+      {courseScopedMode && (
+        <div className="mb-4 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-700">
+          Attendance is filtered to your selected course and timetable for {selectedDate}.
+        </div>
+      )}
+
       {/* Subject, Date, Topic selector */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -144,6 +189,9 @@ export default function FacultyAttendance() {
                 <option key={s.id} value={s.id}>{s.subjectName} ({s.subjectCode})</option>
               ))}
             </select>
+            {subjects.length === 0 && (
+              <p className="text-xs text-rose-600 mt-1">No subject is mapped in timetable for this course/date.</p>
+            )}
           </div>
           {tab === 'mark' && (
             <div>
@@ -227,6 +275,7 @@ export default function FacultyAttendance() {
                   <th className="text-left py-3 px-4 font-medium text-slate-600">#</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-600">Student</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-600">Department</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-600">Section</th>
                   <th className="text-center py-3 px-4 font-medium text-slate-600">Status</th>
                 </tr>
               </thead>
@@ -239,6 +288,7 @@ export default function FacultyAttendance() {
                       <td className="py-3 px-4 text-slate-500">{i + 1}</td>
                       <td className="py-3 px-4 font-medium text-slate-900">{s.name}</td>
                       <td className="py-3 px-4 text-slate-500">{s.department}</td>
+                      <td className="py-3 px-4 text-slate-500">{s.section || '-'}</td>
                       <td className="py-3 px-4 text-center">
                         <button
                           onClick={() => !isLocked && toggleStatus(s.id)}

@@ -14,4 +14,5 @@ public class RegisterRequest {
     private String password;
     private String role = "student";
     private String department;
+    private String section;
 }

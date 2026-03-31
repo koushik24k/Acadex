@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -87,6 +88,7 @@ public class ExamController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('FACULTY') or hasRole('ADMIN')")
     public ResponseEntity<?> createExam(@RequestBody ExamRequest request, Authentication auth) {
         String email = ((UserDetails) auth.getPrincipal()).getUsername();
         User user = userRepository.findByEmail(email).orElseThrow();
@@ -140,11 +142,13 @@ public class ExamController {
 
     // Query-param based update: PUT /exams?id=X (used by frontend)
     @PutMapping
+    @PreAuthorize("hasRole('FACULTY') or hasRole('ADMIN')")
     public ResponseEntity<?> updateExamByParam(@RequestParam Long id, @RequestBody ExamRequest request) {
         return updateExam(id, request);
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('FACULTY') or hasRole('ADMIN')")
     public ResponseEntity<?> updateExam(@PathVariable Long id, @RequestBody ExamRequest request) {
         Exam exam = examRepository.findById(id).orElse(null);
         if (exam == null) return ResponseEntity.notFound().build();
@@ -190,11 +194,13 @@ public class ExamController {
 
     // Query-param based delete: DELETE /exams?id=X (used by frontend)
     @DeleteMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> deleteExamByParam(@RequestParam Long id) {
         return deleteExam(id);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> deleteExam(@PathVariable Long id) {
         if (!examRepository.existsById(id)) return ResponseEntity.notFound().build();
         examRepository.deleteById(id);
@@ -313,6 +319,7 @@ public class ExamController {
     // ── Seating Allocation ──
 
     @PostMapping("/{examId}/generate-seating")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> generateSeating(@PathVariable Long examId,
                                              @RequestBody(required = false) Map<String, Object> body) {
         Exam exam = examRepository.findById(examId).orElse(null);
@@ -393,6 +400,18 @@ public class ExamController {
         }
 
         return ResponseEntity.ok(result);
+    }
+
+    // ── Lock Exam (Admin-Only) ──
+
+    @PostMapping("/{id}/lock")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> lockExam(@PathVariable Long id) {
+        Exam exam = examRepository.findById(id).orElse(null);
+        if (exam == null) return ResponseEntity.notFound().build();
+        exam.setStatus("locked");
+        examRepository.save(exam);
+        return ResponseEntity.ok(ApiResponse.success("Exam locked", Map.of("status", "locked")));
     }
 
     private Map<String, Object> questionToMap(Question q) {

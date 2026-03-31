@@ -20,6 +20,8 @@ import AdminSeatAllocation from './pages/admin/AdminSeatAllocation';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminAttendance from './pages/admin/AdminAttendance';
 import AdminCourses from './pages/admin/AdminCourses';
+import AdminTimetable from './pages/admin/AdminTimetable';
+import AdminStudentRisk from './pages/admin/AdminStudentRisk';
 
 // Faculty pages
 import FacultyDashboard from './pages/faculty/FacultyDashboard';
@@ -44,6 +46,7 @@ import StudentResults from './pages/student/StudentResults';
 import StudentNotifications from './pages/student/StudentNotifications';
 import StudentAttendance from './pages/student/StudentAttendance';
 import StudentCourses from './pages/student/StudentCourses';
+import StudentAssignments from './pages/student/StudentAssignments';
 
 function App() {
   return (
@@ -51,12 +54,14 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Public */}
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardRouter /></ProtectedRoute>} />
 
           {/* Admin */}
+          <Route path="/admin" element={<ProtectedRoute role="admin"><Navigate to="/admin/dashboard" replace /></ProtectedRoute>} />
           <Route path="/admin/dashboard" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/analytics" element={<ProtectedRoute role="admin"><AdminAnalytics /></ProtectedRoute>} />
           <Route path="/admin/exams" element={<ProtectedRoute role="admin"><AdminExams /></ProtectedRoute>} />
@@ -67,8 +72,11 @@ function App() {
           <Route path="/admin/users" element={<ProtectedRoute role="admin"><AdminUsers /></ProtectedRoute>} />
           <Route path="/admin/attendance" element={<ProtectedRoute role="admin"><AdminAttendance /></ProtectedRoute>} />
           <Route path="/admin/courses" element={<ProtectedRoute role="admin"><AdminCourses /></ProtectedRoute>} />
+          <Route path="/admin/timetable" element={<ProtectedRoute role="admin"><AdminTimetable /></ProtectedRoute>} />
+          <Route path="/admin/student-risk" element={<ProtectedRoute role="admin"><AdminStudentRisk /></ProtectedRoute>} />
 
           {/* Faculty */}
+          <Route path="/faculty" element={<ProtectedRoute role="faculty"><Navigate to="/faculty/dashboard" replace /></ProtectedRoute>} />
           <Route path="/faculty/dashboard" element={<ProtectedRoute role="faculty"><FacultyDashboard /></ProtectedRoute>} />
           <Route path="/faculty/exams" element={<ProtectedRoute role="faculty"><FacultyExams /></ProtectedRoute>} />
           <Route path="/faculty/exams/create" element={<ProtectedRoute role="faculty"><FacultyCreateExam /></ProtectedRoute>} />
@@ -83,12 +91,14 @@ function App() {
           <Route path="/faculty/courses" element={<ProtectedRoute role="faculty"><FacultyCourses /></ProtectedRoute>} />
 
           {/* Student */}
+          <Route path="/student" element={<ProtectedRoute role="student"><Navigate to="/student/dashboard" replace /></ProtectedRoute>} />
           <Route path="/student/dashboard" element={<ProtectedRoute role="student"><StudentDashboard /></ProtectedRoute>} />
           <Route path="/student/exams" element={<ProtectedRoute role="student"><StudentExams /></ProtectedRoute>} />
           <Route path="/student/exams/:id" element={<ProtectedRoute role="student"><StudentExamDetails /></ProtectedRoute>} />
           <Route path="/student/exams/:id/take" element={<ProtectedRoute role="student"><StudentTakeExam /></ProtectedRoute>} />
           <Route path="/student/results" element={<ProtectedRoute role="student"><StudentResults /></ProtectedRoute>} />
           <Route path="/student/notifications" element={<ProtectedRoute role="student"><StudentNotifications /></ProtectedRoute>} />
+          <Route path="/student/assignments" element={<ProtectedRoute role="student"><StudentAssignments /></ProtectedRoute>} />
           <Route path="/student/attendance" element={<ProtectedRoute role="student"><StudentAttendance /></ProtectedRoute>} />
           <Route path="/student/courses" element={<ProtectedRoute role="student"><StudentCourses /></ProtectedRoute>} />
 

@@ -1,15 +1,24 @@
 package com.acadex.controller;
 
-import com.acadex.dto.ApiResponse;
-import com.acadex.entity.Room;
-import com.acadex.repository.RoomRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.acadex.dto.ApiResponse;
+import com.acadex.entity.Room;
+import com.acadex.repository.RoomRepository;
 
 @RestController
 @RequestMapping("/api/rooms")
@@ -44,14 +53,19 @@ public class RoomController {
     @PostMapping
     public ResponseEntity<?> createRoom(@RequestBody Map<String, Object> body) {
         String now = LocalDateTime.now().toString();
+        int rows = Integer.parseInt(body.get("rows").toString());
+        int columns = Integer.parseInt(body.get("columns").toString());
+        int membersPerBench = Integer.parseInt(body.get("membersPerBench").toString());
+        int capacity = rows * columns * membersPerBench;
+
         Room room = Room.builder()
                 .name((String) body.get("name"))
                 .building((String) body.get("building"))
                 .floor((String) body.get("floor"))
-                .rows(Integer.parseInt(body.get("rows").toString()))
-                .columns(Integer.parseInt(body.get("columns").toString()))
-                .membersPerBench(Integer.parseInt(body.get("membersPerBench").toString()))
-                .capacity(Integer.parseInt(body.get("capacity").toString()))
+                .rows(rows)
+                .columns(columns)
+                .membersPerBench(membersPerBench)
+                .capacity(capacity)
                 .roomType(body.get("roomType") != null ? (String) body.get("roomType") : "classroom")
                 .boardPosition(body.get("boardPosition") != null ? (String) body.get("boardPosition") : "top")
                 .isActive(true)

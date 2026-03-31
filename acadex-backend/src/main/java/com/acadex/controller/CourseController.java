@@ -1,15 +1,39 @@
 package com.acadex.controller;
 
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import com.acadex.entity.*;
-import com.acadex.repository.*;
+import com.acadex.entity.AttendanceRecord;
+import com.acadex.entity.Course;
+import com.acadex.entity.CourseEnrollment;
+import com.acadex.entity.CourseFacultyMapping;
+import com.acadex.entity.CourseTopic;
+import com.acadex.entity.CourseUnit;
+import com.acadex.entity.User;
+import com.acadex.repository.AttendanceRecordRepository;
+import com.acadex.repository.CourseEnrollmentRepository;
+import com.acadex.repository.CourseFacultyMappingRepository;
+import com.acadex.repository.CourseRepository;
+import com.acadex.repository.CourseTopicRepository;
+import com.acadex.repository.CourseUnitRepository;
+import com.acadex.repository.UserRepository;
 import com.acadex.service.CourseRiskService;
 
 @RestController
@@ -72,6 +96,7 @@ public class CourseController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> createCourse(@RequestBody Map<String, Object> body) {
         Course course = Course.builder()
                 .courseCode(body.get("courseCode").toString())
@@ -90,6 +115,7 @@ public class CourseController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> updateCourse(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         Course course = courseRepository.findById(id).orElse(null);
         if (course == null) return ResponseEntity.notFound().build();
@@ -111,6 +137,7 @@ public class CourseController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> deleteCourse(@PathVariable Long id) {
         Course course = courseRepository.findById(id).orElse(null);
         if (course == null) return ResponseEntity.notFound().build();
@@ -129,6 +156,7 @@ public class CourseController {
     // ΓöÇΓöÇ Publish / Lock ΓöÇΓöÇ
 
     @PostMapping("/{id}/publish")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> publishCourse(@PathVariable Long id) {
         Course course = courseRepository.findById(id).orElse(null);
         if (course == null) return ResponseEntity.notFound().build();
@@ -138,6 +166,7 @@ public class CourseController {
     }
 
     @PostMapping("/{id}/lock")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> lockCourse(@PathVariable Long id) {
         Course course = courseRepository.findById(id).orElse(null);
         if (course == null) return ResponseEntity.notFound().build();
@@ -317,6 +346,7 @@ public class CourseController {
             map.put("courseId", m.getCourseId());
             map.put("facultyId", m.getFacultyId());
             map.put("section", m.getSection());
+            map.put("role", m.getRole() != null ? m.getRole() : "FACULTY");
             userRepository.findById(m.getFacultyId()).ifPresent(u -> map.put("facultyName", u.getName()));
             return map;
         }).collect(Collectors.toList()));
@@ -326,6 +356,11 @@ public class CourseController {
     public ResponseEntity<?> assignFaculty(@PathVariable Long courseId, @RequestBody Map<String, Object> body) {
         String facultyId = body.get("facultyId").toString();
         String section = body.getOrDefault("section", "A").toString();
+        String role = body.getOrDefault("role", "FACULTY").toString().toUpperCase();
+
+        if (!List.of("FACULTY", "COORDINATOR", "HOD").contains(role)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "role must be FACULTY, COORDINATOR, or HOD"));
+        }
 
         // Check if already assigned
         if (courseFacultyMappingRepository.findByCourseIdAndFacultyIdAndSection(courseId, facultyId, section).isPresent()) {
@@ -336,6 +371,7 @@ public class CourseController {
                 .courseId(courseId)
                 .facultyId(facultyId)
                 .section(section)
+            .role(role)
                 .build();
         courseFacultyMappingRepository.save(mapping);
         return ResponseEntity.ok(Map.of("message", "Faculty assigned"));

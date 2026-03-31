@@ -1,13 +1,17 @@
 package com.acadex.security;
 
-import com.acadex.entity.User;
-import com.acadex.repository.UserRepository;
+import java.util.Locale;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.*;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.stream.Collectors;
+import com.acadex.entity.User;
+import com.acadex.repository.UserRepository;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -22,7 +26,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         var authorities = user.getRoles() != null
                 ? user.getRoles().stream()
-                    .map(r -> new SimpleGrantedAuthority("ROLE_" + r.getRole().toUpperCase()))
+                    .map(r -> new SimpleGrantedAuthority("ROLE_" + normalizeRole(r.getRole()).toUpperCase(Locale.ROOT)))
                     .collect(Collectors.toList())
                 : java.util.Collections.singletonList(new SimpleGrantedAuthority("ROLE_STUDENT"));
 
@@ -31,5 +35,14 @@ public class CustomUserDetailsService implements UserDetailsService {
                 user.getPassword(),
                 authorities
         );
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) return "student";
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if ("faculity".equals(normalized) || "facalty".equals(normalized)) {
+            return "faculty";
+        }
+        return normalized;
     }
 }

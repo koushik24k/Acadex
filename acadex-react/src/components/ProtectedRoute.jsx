@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 
 export default function ProtectedRoute({ children, role }) {
   const { isAuthenticated, role: userRole, loading } = useAuth();
+  const storedRole = localStorage.getItem('role');
+  const effectiveRole = (userRole || storedRole || '').toString().toLowerCase();
 
   if (loading) {
     return (
@@ -18,8 +20,8 @@ export default function ProtectedRoute({ children, role }) {
     return <Navigate to="/" replace />;
   }
 
-  if (role && userRole !== role) {
-    return <Navigate to={`/${userRole}/dashboard`} replace />;
+  if (role && effectiveRole !== String(role).toLowerCase()) {
+    return <Navigate to={`/${effectiveRole || 'student'}/dashboard`} replace />;
   }
 
   return children;

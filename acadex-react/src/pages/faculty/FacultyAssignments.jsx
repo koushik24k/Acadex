@@ -13,7 +13,7 @@ export default function FacultyAssignments() {
     setLoading(true);
     const params = { limit: 100 };
     if (statusFilter) params.status = statusFilter;
-    assignmentService.list(params).then((d) => { setAssignments(Array.isArray(d) ? d : []); setLoading(false); }).catch(() => setLoading(false));
+    assignmentService.listMy(params).then((d) => { setAssignments(Array.isArray(d) ? d : []); setLoading(false); }).catch(() => setLoading(false));
   };
 
   useEffect(() => { fetch(); }, [statusFilter]);
