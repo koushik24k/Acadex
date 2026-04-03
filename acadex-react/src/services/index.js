@@ -5,7 +5,10 @@ export const authService = {
     const res = await api.post('/auth/login', { email, password });
     const { token, role, id, name, email: userEmail, roles } = res.data;
     const user = { id, name, email: userEmail, roles };
-    if (token) localStorage.setItem('auth_token', token);
+    if (token) {
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('session_token', token);
+    }
     if (role) localStorage.setItem('role', role);
     if (user && user.id) localStorage.setItem('user', JSON.stringify(user));
     return { token, role, user };
@@ -23,12 +26,13 @@ export const authService = {
 
   logout() {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('session_token');
     localStorage.removeItem('role');
     localStorage.removeItem('user');
   },
 
   getToken() {
-    return localStorage.getItem('auth_token');
+    return localStorage.getItem('auth_token') || localStorage.getItem('session_token');
   },
 
   getUser() {
@@ -41,7 +45,7 @@ export const authService = {
   },
 
   isAuthenticated() {
-    return !!localStorage.getItem('auth_token');
+    return !!(localStorage.getItem('auth_token') || localStorage.getItem('session_token'));
   },
 };
 
@@ -65,6 +69,19 @@ export const examService = {
   create: (data) => api.post('/exams', data).then((r) => r.data),
   update: (id, data) => api.put('/exams', data, { params: { id } }).then((r) => r.data),
   remove: (id) => api.delete('/exams', { params: { id } }).then((r) => r.data),
+};
+
+export const facultyExamService = {
+  list: () => api.get('/faculty/exams').then((r) => r.data),
+  get: (id) => api.get(`/faculty/exams/${id}`).then((r) => r.data),
+};
+
+export const studentExamService = {
+  list: () => api.get('/student/exams').then((r) => r.data),
+  get: (id) => api.get(`/student/exams/${id}`).then((r) => r.data),
+  questions: (id) => api.get(`/student/exams/${id}/questions`).then((r) => r.data),
+  checkRegistration: (id) => api.get(`/student/exams/${id}/check-registration`).then((r) => r.data),
+  register: (id) => api.post(`/student/exams/${id}/register`).then((r) => r.data),
 };
 
 export const questionService = {
@@ -105,6 +122,10 @@ export const assignmentSubmissionService = {
   list: (params) => api.get('/assignment-submissions', { params }).then((r) => r.data),
   get: (id) => api.get(`/assignment-submissions/${id}`).then((r) => r.data),
   create: (data) => api.post('/assignment-submissions', data).then((r) => r.data),
+  upload: (formData) =>
+    api.post('/assignment-submissions/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
   grade: (id, data) => api.put(`/assignment-submissions/${id}/grade`, data).then((r) => r.data),
 };
 
@@ -161,6 +182,7 @@ export const attendanceService = {
   lock: (params) => api.post('/attendance/lock', null, { params }).then((r) => r.data),
   getStats: (params) => api.get('/attendance/stats', { params }).then((r) => r.data),
   getStudents: (params) => api.get('/attendance/students', { params }).then((r) => r.data),
+  override: (data) => api.post('/attendance/override', data).then((r) => r.data),
 };
 
 export const analyticsService = {
@@ -179,6 +201,8 @@ export const timetableService = {
     remove: (id) => api.delete(`/timetable/${id}`).then((r) => r.data),
     getForFaculty: (facultyId) => api.get(`/timetable/faculty/${facultyId}`).then((r) => r.data),
     getForCourse: (courseId) => api.get(`/timetable/course/${courseId}`).then((r) => r.data),
+  predictSlots: (data) => api.post('/timetable/predict-slots', data).then((r) => r.data),
+  autoGenerateSemester: (data) => api.post('/timetable/auto-generate-semester', data).then((r) => r.data),
 };
 
 export const topicService = {
@@ -207,6 +231,7 @@ export const courseService = {
   remove: (id) => api.delete(`/courses/${id}`).then((r) => r.data),
   publish: (id) => api.post(`/courses/${id}/publish`).then((r) => r.data),
   lock: (id) => api.post(`/courses/${id}/lock`).then((r) => r.data),
+  unlock: (id) => api.post(`/courses/${id}/unlock`).then((r) => r.data),
   clone: (id, data) => api.post(`/courses/${id}/clone`, data).then((r) => r.data),
   getProgress: (id) => api.get(`/courses/${id}/progress`).then((r) => r.data),
   getRisk: (id) => api.get(`/courses/${id}/risk`).then((r) => r.data),

@@ -15,19 +15,22 @@ export default function FacultyCourses() {
   const [completing, setCompleting] = useState(null);
   const [msg, setMsg] = useState('');
 
-  useEffect(() => { loadCourses(); }, []);
+  useEffect(() => {
+    if (user?.id) {
+      loadCourses(user.id);
+    }
+  }, [user?.id]);
 
-  const loadCourses = async () => {
+  const loadCourses = async (facultyId) => {
+    if (!facultyId) {
+      setCourses([]);
+      return;
+    }
+
     try {
       setLoading(true);
-      const data = await courseService.list({ facultyId: user?.id });
-      const assigned = Array.isArray(data) ? data : [];
-      if (assigned.length > 0) {
-        setCourses(assigned);
-      } else {
-        const fallback = await courseService.list({ status: 'Published' });
-        setCourses(Array.isArray(fallback) ? fallback : []);
-      }
+      const data = await courseService.list({ facultyId });
+      setCourses(Array.isArray(data) ? data : []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
@@ -55,8 +58,10 @@ export default function FacultyCourses() {
     } finally { setCompleting(null); }
   };
 
-  const goToAttendanceForCourse = (courseId) => {
-    navigate(`/faculty/attendance?courseId=${courseId}&fromCourse=1`);
+  const goToAttendanceForCourse = (courseId, course) => {
+    const subjectHint = encodeURIComponent(course?.courseName || '');
+    const subjectCodeHint = encodeURIComponent(course?.courseCode || '');
+    navigate(`/faculty/attendance?courseId=${courseId}&fromCourse=1&subjectHint=${subjectHint}&subjectCodeHint=${subjectCodeHint}`);
   };
 
   if (loading) return (
@@ -79,7 +84,7 @@ export default function FacultyCourses() {
             <p className="text-sm text-slate-500">{detail.courseCode} · {detail.department} · Sem {detail.semester} · {detail.credits} Credits</p>
           </div>
           <button
-            onClick={() => goToAttendanceForCourse(detail.id)}
+            onClick={() => goToAttendanceForCourse(detail.id, detail)}
             className="px-3 py-2 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition"
           >
             Take Attendance
@@ -213,7 +218,7 @@ export default function FacultyCourses() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    goToAttendanceForCourse(c.id);
+                    goToAttendanceForCourse(c.id, c);
                   }}
                   className="mt-3 w-full px-3 py-2 text-xs font-semibold rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 transition"
                 >

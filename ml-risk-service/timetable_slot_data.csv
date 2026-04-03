@@ -1,0 +1,9 @@
+subject,faculty,semester,difficulty,sessionType,day,startTime
+Math,F1,3,High,Theory,MONDAY,09:00
+Data Structures,F2,3,Medium,Theory,TUESDAY,11:00
+Operating Systems,F3,4,High,Theory,WEDNESDAY,09:00
+DBMS Lab,F2,4,Medium,Lab,THURSDAY,14:00
+Networks,F4,5,Medium,Theory,FRIDAY,11:00
+AI Lab,F5,5,High,Lab,MONDAY,14:00
+Compiler Design,F6,6,High,Theory,TUESDAY,09:00
+Software Engineering,F1,6,Low,Theory,THURSDAY,11:00

@@ -3,6 +3,16 @@ import { authService } from '../services';
 
 const AuthContext = createContext(null);
 
+const getCachedAuthState = () => {
+  const cachedUser = authService.getUser();
+  const cachedRole = localStorage.getItem('role') || localStorage.getItem('mock_role');
+  const derivedRole = cachedRole || (Array.isArray(cachedUser?.roles) && cachedUser.roles[0]) || null;
+  return {
+    user: cachedUser,
+    role: derivedRole ? String(derivedRole).toLowerCase() : null,
+  };
+};
+
 // Dev-mode credentials — these match the DataInitializer seed data
 const DEV_CREDENTIALS = {
   admin:   { email: 'admin@acadex.com',   password: 'admin123' },
@@ -11,8 +21,9 @@ const DEV_CREDENTIALS = {
 };
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
+  const cachedAuth = getCachedAuthState();
+  const [user, setUser] = useState(cachedAuth.user);
+  const [role, setRole] = useState(cachedAuth.role);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,37 +42,70 @@ export function AuthProvider({ children }) {
         const storedUser = authService.getUser();
         const savedRole = localStorage.getItem('role') || localStorage.getItem('mock_role');
 
-        if (hasToken && storedUser) {
+        if (storedUser?.id && isMounted) {
           const derivedRole =
-            normalizeRole(savedRole) ||
             normalizeRole(Array.isArray(storedUser.roles) ? storedUser.roles[0] : null) ||
+            normalizeRole(savedRole) ||
             'student';
-
-          if (isMounted) {
-            setUser(storedUser);
-            setRole(derivedRole);
-          }
-          return;
+          setUser(storedUser);
+          setRole(derivedRole);
         }
 
-        // Fallback recovery when token exists but local user cache is missing/corrupt
         if (hasToken) {
+          // Always verify token-backed session to avoid stale local role/user mismatches.
           const session = await authService.getSession();
           const sessionUser = session?.user;
+
           if (sessionUser?.id && isMounted) {
             const derivedRole =
-              normalizeRole(savedRole) ||
               normalizeRole(Array.isArray(sessionUser.roles) ? sessionUser.roles[0] : null) ||
+              normalizeRole(savedRole) ||
               'student';
 
             localStorage.setItem('user', JSON.stringify(sessionUser));
             localStorage.setItem('role', derivedRole);
             setUser(sessionUser);
             setRole(derivedRole);
+            return;
+          }
+
+          // Fallback to cached session data when backend session check is temporarily unavailable.
+          if (storedUser?.id && isMounted) {
+            const derivedRole =
+              normalizeRole(Array.isArray(storedUser.roles) ? storedUser.roles[0] : null) ||
+              normalizeRole(savedRole) ||
+              'student';
+            setUser(storedUser);
+            setRole(derivedRole);
+            return;
+          }
+
+          authService.logout();
+          localStorage.removeItem('mock_role');
+          if (isMounted) {
+            setUser(null);
+            setRole(null);
           }
         }
       } catch {
-        // Ignore restore failures; user can log in again.
+        // Keep user logged in from cache on transient refresh failures.
+        const storedUser = authService.getUser();
+        const savedRole = localStorage.getItem('role') || localStorage.getItem('mock_role');
+        if (storedUser?.id && isMounted) {
+          const derivedRole =
+            normalizeRole(Array.isArray(storedUser.roles) ? storedUser.roles[0] : null) ||
+            normalizeRole(savedRole) ||
+            'student';
+          setUser(storedUser);
+          setRole(derivedRole);
+        } else {
+          authService.logout();
+          localStorage.removeItem('mock_role');
+          if (isMounted) {
+            setUser(null);
+            setRole(null);
+          }
+        }
       } finally {
         if (isMounted) setLoading(false);
       }

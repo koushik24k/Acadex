@@ -11,19 +11,17 @@ export default function StudentCourses() {
   const [detail, setDetail] = useState(null);
   const [progress, setProgress] = useState(null);
 
-  useEffect(() => { loadCourses(); }, []);
+  useEffect(() => {
+    if (user?.id) {
+      loadCourses(user.id);
+    }
+  }, [user?.id]);
 
-  const loadCourses = async () => {
+  const loadCourses = async (studentId) => {
     try {
       setLoading(true);
-      const data = await courseService.list({ studentId: user?.id });
-      const enrolled = Array.isArray(data) ? data : [];
-      if (enrolled.length > 0) {
-        setCourses(enrolled);
-      } else {
-        const fallback = await courseService.list({ status: 'Published' });
-        setCourses(Array.isArray(fallback) ? fallback : []);
-      }
+      const data = await courseService.list({ studentId });
+      setCourses(Array.isArray(data) ? data : []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 

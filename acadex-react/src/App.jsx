@@ -20,6 +20,7 @@ import AdminSeatAllocation from './pages/admin/AdminSeatAllocation';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminAttendance from './pages/admin/AdminAttendance';
 import AdminCourses from './pages/admin/AdminCourses';
+import AdminAttendanceMarking from './pages/admin/AdminAttendanceMarking';
 import AdminTimetable from './pages/admin/AdminTimetable';
 import AdminStudentRisk from './pages/admin/AdminStudentRisk';
 
@@ -36,6 +37,7 @@ import FacultyGrading from './pages/faculty/FacultyGrading';
 import FacultyAssignmentGrading from './pages/faculty/FacultyAssignmentGrading';
 import FacultyAttendance from './pages/faculty/FacultyAttendance';
 import FacultyCourses from './pages/faculty/FacultyCourses';
+import FacultyResources from './pages/faculty/FacultyResources';
 
 // Student pages
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -47,6 +49,7 @@ import StudentNotifications from './pages/student/StudentNotifications';
 import StudentAttendance from './pages/student/StudentAttendance';
 import StudentCourses from './pages/student/StudentCourses';
 import StudentAssignments from './pages/student/StudentAssignments';
+import StudentCourseResources from './pages/student/StudentCourseResources';
 
 function App() {
   return (
@@ -71,6 +74,7 @@ function App() {
           <Route path="/admin/seat-allocation" element={<ProtectedRoute role="admin"><AdminSeatAllocation /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute role="admin"><AdminUsers /></ProtectedRoute>} />
           <Route path="/admin/attendance" element={<ProtectedRoute role="admin"><AdminAttendance /></ProtectedRoute>} />
+                    <Route path="/admin/mark-attendance" element={<ProtectedRoute role="admin"><AdminAttendanceMarking /></ProtectedRoute>} />
           <Route path="/admin/courses" element={<ProtectedRoute role="admin"><AdminCourses /></ProtectedRoute>} />
           <Route path="/admin/timetable" element={<ProtectedRoute role="admin"><AdminTimetable /></ProtectedRoute>} />
           <Route path="/admin/student-risk" element={<ProtectedRoute role="admin"><AdminStudentRisk /></ProtectedRoute>} />
@@ -89,6 +93,7 @@ function App() {
           <Route path="/faculty/assignments/grade" element={<ProtectedRoute role="faculty"><FacultyAssignmentGrading /></ProtectedRoute>} />
           <Route path="/faculty/attendance" element={<ProtectedRoute role="faculty"><FacultyAttendance /></ProtectedRoute>} />
           <Route path="/faculty/courses" element={<ProtectedRoute role="faculty"><FacultyCourses /></ProtectedRoute>} />
+          <Route path="/faculty/resources" element={<ProtectedRoute role="faculty"><FacultyResources /></ProtectedRoute>} />
 
           {/* Student */}
           <Route path="/student" element={<ProtectedRoute role="student"><Navigate to="/student/dashboard" replace /></ProtectedRoute>} />
@@ -101,6 +106,7 @@ function App() {
           <Route path="/student/assignments" element={<ProtectedRoute role="student"><StudentAssignments /></ProtectedRoute>} />
           <Route path="/student/attendance" element={<ProtectedRoute role="student"><StudentAttendance /></ProtectedRoute>} />
           <Route path="/student/courses" element={<ProtectedRoute role="student"><StudentCourses /></ProtectedRoute>} />
+          <Route path="/student/resources" element={<ProtectedRoute role="student"><StudentCourseResources /></ProtectedRoute>} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -20,8 +20,13 @@ export default function AdminExams() {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this exam?')) return;
-    await examService.remove(id);
-    fetchExams();
+    try {
+      await examService.remove(id);
+    } catch {
+      // Keep the UI responsive even if the backend delete is rejected.
+    }
+
+    setExams((current) => current.filter((exam) => String(exam.id) !== String(id)));
   };
 
   const filtered = exams.filter((e) =>

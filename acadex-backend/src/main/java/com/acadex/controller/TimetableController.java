@@ -22,27 +22,52 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.acadex.dto.TimetableAutoGenerateRequest;
+import com.acadex.dto.TimetableSlotPredictionRequest;
 import com.acadex.entity.Subject;
 import com.acadex.entity.Timetable;
 import com.acadex.repository.CourseFacultyMappingRepository;
 import com.acadex.repository.SubjectRepository;
 import com.acadex.service.TimetableService;
+import com.acadex.service.TimetableSlotPredictionService;
 
 @RestController
 @RequestMapping("/api/timetable")
 public class TimetableController {
 
     private final TimetableService timetableService;
+    private final TimetableSlotPredictionService timetableSlotPredictionService;
     private final CourseFacultyMappingRepository courseFacultyMappingRepository;
     private final SubjectRepository subjectRepository;
 
     @Autowired
     public TimetableController(TimetableService timetableService,
+                               TimetableSlotPredictionService timetableSlotPredictionService,
                                CourseFacultyMappingRepository courseFacultyMappingRepository,
                                SubjectRepository subjectRepository) {
         this.timetableService = timetableService;
+        this.timetableSlotPredictionService = timetableSlotPredictionService;
         this.courseFacultyMappingRepository = courseFacultyMappingRepository;
         this.subjectRepository = subjectRepository;
+    }
+
+    @PostMapping("/predict-slots")
+    public ResponseEntity<?> predictSlots(@RequestBody TimetableSlotPredictionRequest request) {
+        return ResponseEntity.ok(timetableSlotPredictionService.predictSlots(request));
+    }
+
+    @PostMapping("/auto-generate-semester")
+    public ResponseEntity<?> autoGenerateSemester(@RequestBody TimetableAutoGenerateRequest request) {
+        if (request == null || request.semester() == null || request.semester().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "semester is required"));
+        }
+        return ResponseEntity.ok(
+                timetableService.autoGenerateSemesterTimetable(
+                        request.semester(),
+                        request.department(),
+                        Boolean.TRUE.equals(request.overwriteExisting())
+                )
+        );
     }
 
     @GetMapping

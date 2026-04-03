@@ -1,35 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { examService, registrationService } from '../../services';
+import { studentExamService } from '../../services';
 import { Search, Calendar, Clock, BookOpen } from 'lucide-react';
 
 export default function StudentExams() {
-  const [exams, setExams] = useState([]);
-  const [registrations, setRegistrations] = useState({});
+  // Load cached exams immediately so user sees exams during fetch
+  const cachedExams = JSON.parse(localStorage.getItem('student_exams_cache') || '[]');
+  const cachedRegistrations = JSON.parse(localStorage.getItem('student_exam_registrations_cache') || '{}');
+  
+  const [exams, setExams] = useState(cachedExams);
+  const [registrations, setRegistrations] = useState(cachedRegistrations);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    examService.list({ status: 'published' }).then(async (data) => {
+    studentExamService.list().then(async (data) => {
       const list = Array.isArray(data) ? data : [];
       setExams(list);
+      localStorage.setItem('student_exams_cache', JSON.stringify(list));
       // Check registrations
       const regMap = {};
       await Promise.allSettled(list.map(async (e) => {
         try {
-          const reg = await registrationService.check(e.id);
+          const reg = await studentExamService.checkRegistration(e.id);
           if (reg && reg.registered) regMap[e.id] = reg;
         } catch {}
       }));
       setRegistrations(regMap);
+      localStorage.setItem('student_exam_registrations_cache', JSON.stringify(regMap));
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => {
+      // Keep cached exams on screen during reload even if the backend request is blocked.
+      setLoading(false);
+    });
   }, []);
 
   const filtered = exams.filter((e) =>
     e.title?.toLowerCase().includes(search.toLowerCase()) ||
-    e.subject?.toLowerCase().includes(search.toLowerCase())
+    e.subject?.toLowerCase().includes(search.toLowerCase()) ||
+    e.courseName?.toLowerCase().includes(search.toLowerCase()) ||
+    e.courseCode?.toLowerCase().includes(search.toLowerCase())
   );
 
   const getStatus = (exam) => {
@@ -67,12 +78,19 @@ export default function StudentExams() {
           {filtered.map((exam) => {
             const status = getStatus(exam);
             const reg = registrations[exam.id];
+            const examMode = exam.examMode || ((exam.questionCount || 0) > 0 ? 'online' : 'offline');
             return (
-              <Link to={`/student/exams/${exam.id}`} key={exam.id} className="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition">
+              <Link to={`/student/exams/${exam.id}`} state={{ exam }} key={exam.id} className="bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="font-semibold text-gray-900 text-sm">{exam.title}</h3>
                   {statusBadge(status)}
                 </div>
+                <div className="mb-3">
+                  <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide ${examMode === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {examMode}
+                  </span>
+                </div>
+                {exam.courseName && <p className="text-xs text-gray-600 mb-1">{exam.courseName}{exam.courseCode ? ` (${exam.courseCode})` : ''}</p>}
                 {exam.subject && <p className="text-xs text-gray-500 mb-3">{exam.subject}</p>}
                 <div className="space-y-1.5 text-xs text-gray-500">
                   <p className="flex items-center"><Calendar className="w-3 h-3 mr-1.5" />{exam.date || 'TBD'}</p>

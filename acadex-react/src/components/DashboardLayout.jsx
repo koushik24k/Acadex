@@ -36,6 +36,7 @@ const navItems = {
     { label: 'Exam Grading', path: '/faculty/grading' },
     { label: 'Assignment Grading', path: '/faculty/assignments/grade' },
     { label: 'Courses', path: '/faculty/courses' },
+    { label: 'Resources', path: '/faculty/resources' },
   ],
   student: [
     { label: 'Dashboard', path: '/student/dashboard' },
@@ -45,6 +46,7 @@ const navItems = {
     { label: 'Notifications', path: '/student/notifications' },
     { label: 'Attendance', path: '/student/attendance' },
     { label: 'Courses', path: '/student/courses' },
+    { label: 'Resources', path: '/student/resources' },
   ],
 };
 

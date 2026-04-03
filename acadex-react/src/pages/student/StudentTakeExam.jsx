@@ -1,8 +1,42 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { questionService, submissionService, examService } from '../../services';
+import { submissionService, studentExamService } from '../../services';
 import { Clock, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+
+const normalizeQuestionType = (type) => {
+  if (type === 'fill-blank') return 'fill-in-blank';
+  return type;
+};
+
+const parseOptions = (options) => {
+  if (Array.isArray(options)) return options;
+  if (typeof options === 'string') {
+    try {
+      const parsed = JSON.parse(options);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const parseMultipleAnswers = (value) => {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return value.split(',').map((v) => v.trim()).filter(Boolean);
+    }
+  }
+  return [];
+};
+
+const normalizeAnswerValue = (value) => String(value || '').trim().toLowerCase();
 
 export default function StudentTakeExam() {
   const { id } = useParams();
@@ -18,16 +52,12 @@ export default function StudentTakeExam() {
   const timerRef = useRef(null);
 
   useEffect(() => {
-    console.log('StudentTakeExam mounted with examId:', id);
     Promise.all([
-      examService.get(id),
-      questionService.list(id),
+      studentExamService.get(id),
+      studentExamService.questions(id),
     ]).then(([examData, questionsData]) => {
-      console.log('Exam data:', examData);
-      console.log('Questions data:', questionsData);
       setExam(examData);
       const qs = Array.isArray(questionsData) ? questionsData : [];
-      console.log('Processed questions:', qs);
       setQuestions(qs);
       setTimeLeft((examData.duration || 60) * 60);
       setLoading(false);
@@ -65,24 +95,45 @@ export default function StudentTakeExam() {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
+  const toggleMultipleAnswer = (questionId, option) => {
+    setAnswers((prev) => {
+      const current = Array.isArray(prev[questionId]) ? prev[questionId] : [];
+      const next = current.includes(option)
+        ? current.filter((v) => v !== option)
+        : [...current, option];
+      return { ...prev, [questionId]: next };
+    });
+  };
+
   const handleSubmit = useCallback(async (auto = false) => {
     if (submitting) return;
     setSubmitting(true);
     clearInterval(timerRef.current);
 
-    // Auto-grade MCQ and fill-in-blank
+    // Auto-grade objective question types.
     const answerList = questions.map((q) => {
-      const ans = answers[q.id] || '';
+      const normalizedType = normalizeQuestionType(q.type);
+      const ans = answers[q.id] ?? '';
       let isCorrect = null;
       let marksAwarded = 0;
-      if (q.type === 'mcq' && q.correctAnswer) {
-        isCorrect = ans === q.correctAnswer;
+      if (normalizedType === 'mcq' && q.correctAnswer) {
+        isCorrect = normalizeAnswerValue(ans) === normalizeAnswerValue(q.correctAnswer);
         marksAwarded = isCorrect ? (q.marks || 1) : 0;
-      } else if (q.type === 'fill-in-blank' && q.correctAnswer) {
-        isCorrect = ans.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
+      } else if (normalizedType === 'multiple-correct' && q.correctAnswer) {
+        const expected = parseMultipleAnswers(q.correctAnswer).map(normalizeAnswerValue).sort();
+        const selected = parseMultipleAnswers(ans).map(normalizeAnswerValue).sort();
+        isCorrect = expected.length > 0 && JSON.stringify(expected) === JSON.stringify(selected);
+        marksAwarded = isCorrect ? (q.marks || 1) : 0;
+      } else if (normalizedType === 'fill-in-blank' && q.correctAnswer) {
+        isCorrect = normalizeAnswerValue(ans) === normalizeAnswerValue(q.correctAnswer);
         marksAwarded = isCorrect ? (q.marks || 1) : 0;
       }
-      return { questionId: q.id, answer: ans, isCorrect, marksAwarded };
+      return {
+        questionId: q.id,
+        answer: Array.isArray(ans) ? JSON.stringify(ans) : ans,
+        isCorrect,
+        marksAwarded,
+      };
     });
 
     try {
@@ -102,9 +153,11 @@ export default function StudentTakeExam() {
   );
 
   const q = questions[currentQ];
-  const answered = Object.keys(answers).filter((k) => answers[k]).length;
+  const answered = Object.values(answers).filter((value) => {
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  }).length;
   const isLowTime = timeLeft < 300;
-  console.log('Render state - currentQ:', currentQ, 'questions.length:', questions.length, 'q:', q, 'showingNextButton:', currentQ < questions.length - 1);
 
   return (
     <DashboardLayout role="student">
@@ -127,14 +180,14 @@ export default function StudentTakeExam() {
             <div className="bg-white rounded-xl shadow-sm border p-6">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm text-gray-500">Question {currentQ + 1} of {questions.length}</span>
-                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{q.type} | {q.marks || 1} marks</span>
+                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{normalizeQuestionType(q.type)} | {q.marks || 1} marks</span>
               </div>
               <p className="text-gray-900 font-medium mb-6">{q.questionText || q.text}</p>
 
               {/* MCQ */}
-              {q.type === 'mcq' && q.options && (
+              {normalizeQuestionType(q.type) === 'mcq' && (
                 <div className="space-y-2">
-                  {(Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]')).map((opt, i) => (
+                  {parseOptions(q.options).map((opt, i) => (
                     <label key={i} className={`flex items-center p-3 rounded-lg border cursor-pointer transition ${answers[q.id] === opt ? 'bg-indigo-50 border-indigo-300' : 'hover:bg-gray-50'}`}>
                       <input type="radio" name={`q-${q.id}`} checked={answers[q.id] === opt} onChange={() => handleAnswer(q.id, opt)} className="mr-3" />
                       <span className="text-sm">{opt}</span>
@@ -143,23 +196,38 @@ export default function StudentTakeExam() {
                 </div>
               )}
 
+              {/* Multiple Correct */}
+              {normalizeQuestionType(q.type) === 'multiple-correct' && (
+                <div className="space-y-2">
+                  {parseOptions(q.options).map((opt, i) => {
+                    const selected = Array.isArray(answers[q.id]) && answers[q.id].includes(opt);
+                    return (
+                      <label key={i} className={`flex items-center p-3 rounded-lg border cursor-pointer transition ${selected ? 'bg-indigo-50 border-indigo-300' : 'hover:bg-gray-50'}`}>
+                        <input type="checkbox" checked={selected} onChange={() => toggleMultipleAnswer(q.id, opt)} className="mr-3" />
+                        <span className="text-sm">{opt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Fill in blank */}
-              {q.type === 'fill-in-blank' && (
+              {normalizeQuestionType(q.type) === 'fill-in-blank' && (
                 <input value={answers[q.id] || ''} onChange={(e) => handleAnswer(q.id, e.target.value)} placeholder="Type your answer..." className="w-full px-4 py-3 border rounded-lg outline-none text-sm" />
               )}
 
               {/* Subjective */}
-              {q.type === 'subjective' && (
+              {normalizeQuestionType(q.type) === 'subjective' && (
                 <textarea value={answers[q.id] || ''} onChange={(e) => handleAnswer(q.id, e.target.value)} rows={6} placeholder="Write your answer..." className="w-full px-4 py-3 border rounded-lg outline-none text-sm" />
               )}
 
               {/* Navigation */}
               <div className="flex justify-between mt-6 pt-4 border-t">
-                <button onClick={() => {console.log('Previous clicked, currentQ:', currentQ); setCurrentQ(Math.max(0, currentQ - 1));}} disabled={currentQ === 0} className="flex items-center px-4 py-2 text-sm text-gray-600 border rounded-lg disabled:opacity-40">
+                <button onClick={() => setCurrentQ(Math.max(0, currentQ - 1))} disabled={currentQ === 0} className="flex items-center px-4 py-2 text-sm text-gray-600 border rounded-lg disabled:opacity-40">
                   <ChevronLeft className="w-4 h-4 mr-1" /> Previous
                 </button>
                 {currentQ < questions.length - 1 ? (
-                  <button onClick={() => {console.log('Next clicked, currentQ:', currentQ, 'questions.length:', questions.length); setCurrentQ(currentQ + 1);}} className="flex items-center px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg">
+                  <button onClick={() => setCurrentQ(currentQ + 1)} className="flex items-center px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg">
                     Next <ChevronRight className="w-4 h-4 ml-1" />
                   </button>
                 ) : (

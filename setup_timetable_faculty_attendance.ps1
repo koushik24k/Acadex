@@ -11,9 +11,9 @@ $adminToken = Get-Token 'admin@acadex.com' 'admin123'
 $adminHeaders = @{ Authorization = "Bearer $adminToken" }
 
 $targets = @(
-  @{ email='prof.algebra@acadex.com'; subjectCode='MATH201'; display='Prof Algebra' },
-  @{ email='prof.physics@acadex.com'; subjectCode='PHY201'; display='Prof Physics' },
-  @{ email='prof.chem@acadex.com'; subjectCode='CHEM201'; display='Prof Chemistry' }
+  @{ email='faculty@acadex.com'; subjectCode='CS201'; display='Faculty User' },
+  @{ email='faculty@acadex.com'; subjectCode='CS301'; display='Faculty User' },
+  @{ email='faculty@acadex.com'; subjectCode='CS302'; display='Faculty User' }
 )
 
 $facultyUsers = Invoke-RestMethod -Method Get -Uri "$base/api/admin/users?role=faculty" -Headers $adminHeaders
@@ -28,7 +28,7 @@ foreach ($t in $targets) {
   # Normalize role for Spring hasRole('FACULTY') checks.
   Invoke-RestMethod -Method Put -Uri "$base/api/admin/users/$($faculty.id)" -Headers $adminHeaders -ContentType 'application/json' -Body (@{
     role = 'FACULTY'
-    department = 'Engineering'
+    department = 'Computer Science'
     section = 'A'
   } | ConvertTo-Json -Compress) | Out-Null
 
@@ -38,9 +38,9 @@ foreach ($t in $targets) {
   # Bind subject to faculty so attendance mark authorization passes.
   Invoke-RestMethod -Method Put -Uri "$base/api/subjects/$($subject.id)" -Headers $adminHeaders -ContentType 'application/json' -Body (@{
     facultyId = $faculty.id
-    department = 'Engineering'
+    department = 'Computer Science'
     section = 'A'
-    semester = 'Sem-1'
+    semester = 'Sem-3'
   } | ConvertTo-Json -Compress) | Out-Null
 
   # Ensure course-faculty mapping exists for timetable creation precondition.

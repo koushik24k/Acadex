@@ -1,25 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { examService, resultService, notificationService, assignmentService } from '../../services';
+import { studentExamService, resultService, notificationService, assignmentService } from '../../services';
 import { BookOpen, Award, Bell, FileText, Calendar, Clock } from 'lucide-react';
 
 export default function StudentDashboard() {
-  const [upcomingExams, setUpcomingExams] = useState([]);
-  const [results, setResults] = useState([]);
+  // Load cached data immediately so user sees dashboard during fetch
+  const cachedExams = JSON.parse(localStorage.getItem('student_upcoming_exams_cache') || '[]');
+  const cachedResults = JSON.parse(localStorage.getItem('student_results_cache') || '[]');
+  
+  const [upcomingExams, setUpcomingExams] = useState(cachedExams);
+  const [results, setResults] = useState(cachedResults);
   const [notifications, setNotifications] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.allSettled([
-      examService.list({ status: 'published' }),
+      studentExamService.list(),
       resultService.list({ published: true }),
       notificationService.list({ limit: 5 }),
       assignmentService.list({ limit: 5 }),
     ]).then(([examsR, resultsR, notifsR, assignR]) => {
-      setUpcomingExams(Array.isArray(examsR.value) ? examsR.value.slice(0, 5) : []);
-      setResults(Array.isArray(resultsR.value) ? resultsR.value.slice(0, 5) : []);
+      const freshExams = Array.isArray(examsR.value) ? examsR.value.slice(0, 5) : [];
+      const freshResults = Array.isArray(resultsR.value) ? resultsR.value.slice(0, 5) : [];
+      setUpcomingExams(freshExams);
+      setResults(freshResults);
+      localStorage.setItem('student_upcoming_exams_cache', JSON.stringify(freshExams));
+      localStorage.setItem('student_results_cache', JSON.stringify(freshResults));
       setNotifications(Array.isArray(notifsR.value) ? notifsR.value.slice(0, 5) : []);
       setAssignments(Array.isArray(assignR.value) ? assignR.value.slice(0, 5) : []);
       setLoading(false);

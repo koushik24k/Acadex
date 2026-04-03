@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { examService, roomService } from '../../services';
+import { examService, roomService, courseService } from '../../services';
 
 export default function AdminCreateExam() {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     title: '', description: '', classId: '', roomId: '',
@@ -15,7 +16,13 @@ export default function AdminCreateExam() {
   });
 
   useEffect(() => {
-    roomService.list({ isActive: true }).then((data) => setRooms(Array.isArray(data) ? data : [])).catch(() => {});
+    Promise.all([
+      roomService.list({ isActive: true }).catch(() => []),
+      courseService.list({}).catch(() => []),
+    ]).then(([roomData, courseData]) => {
+      setRooms(Array.isArray(roomData) ? roomData : []);
+      setCourses(Array.isArray(courseData) ? courseData : []);
+    });
   }, []);
 
   const handleChange = (e) => {
@@ -58,8 +65,11 @@ export default function AdminCreateExam() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Class ID</label>
-              <input name="classId" value={form.classId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Course *</label>
+              <select name="classId" value={form.classId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none">
+                <option value="">Select course</option>
+                {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.courseName} ({course.courseCode})</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Room</label>

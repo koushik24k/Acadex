@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { attendanceService, subjectService, topicVerificationService } from '../../services';
 
+const isCreatedSubject = (subject) => {
+  const code = String(subject?.subjectCode || '').trim().toUpperCase();
+  const department = String(subject?.department || '').trim().toLowerCase();
+  return code.startsWith('CS') || department === 'computer science';
+};
+
 export default function AdminAttendance() {
   const [tab, setTab] = useState('overview');
   const [stats, setStats] = useState(null);
@@ -34,7 +40,7 @@ export default function AdminAttendance() {
         subjectService.list().catch(() => []),
       ]);
       setStats(statsData);
-      setSubjects(Array.isArray(subjectData) ? subjectData : []);
+      setSubjects((Array.isArray(subjectData) ? subjectData : []).filter(isCreatedSubject));
     } catch (e) {
       console.error(e);
     }

@@ -11,7 +11,7 @@ export default function AdminUsers() {
   const [showBulk, setShowBulk] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student', department: '', section: '' });
-  const [bulkForm, setBulkForm] = useState({ startRollNumber: '', endRollNumber: '', emailPattern: '{rollno}@student.edu', namePattern: 'Student {rollno}', department: '', section: '', defaultPassword: 'password123' });
+  const [bulkForm, setBulkForm] = useState({ startRollNumber: '', endRollNumber: '', emailPattern: '{rollno}@student.edu', namePattern: 'Student {rollno}', department: '', defaultPassword: 'password123' });
   const [bulkResult, setBulkResult] = useState(null);
 
   const fetchUsers = () => {
@@ -53,38 +53,61 @@ export default function AdminUsers() {
 
   const handleBulkCreate = async () => {
     try {
-      // Extract the numeric range from roll numbers (e.g., CS001 -> 1, CS050 -> 50)
-      const startMatch = bulkForm.startRollNumber.match(/(\d+)/);
-      const endMatch = bulkForm.endRollNumber.match(/(\d+)/);
-      
+      const startRaw = String(bulkForm.startRollNumber || '').trim();
+      const endRaw = String(bulkForm.endRollNumber || '').trim();
+      const startMatch = startRaw.match(/(\d+)/);
+      const endMatch = endRaw.match(/(\d+)/);
+
       if (!startMatch || !endMatch) {
-        alert('Invalid roll number format. Use format like CS001 to CS050');
+        alert('Invalid ID range. Example: 25100001 to 25100700 (or CS001 to CS050)');
         return;
       }
 
-      const startNum = parseInt(startMatch[1]);
-      const endNum = parseInt(endMatch[1]);
-      const prefix = bulkForm.startRollNumber.replace(/\d+/, ''); // Extract non-numeric prefix
+      const startNum = parseInt(startMatch[1], 10);
+      const endNum = parseInt(endMatch[1], 10);
+      if (Number.isNaN(startNum) || Number.isNaN(endNum) || endNum < startNum) {
+        alert('Invalid range: End ID must be greater than or equal to Start ID');
+        return;
+      }
+
+      const prefix = startRaw.replace(/\d+/, '');
+      const digits = startMatch[1].length;
+      const total = endNum - startNum + 1;
+      if (total > 5000) {
+        alert('Range too large. Please create at most 5000 students at once.');
+        return;
+      }
 
       const users = [];
       for (let i = startNum; i <= endNum; i++) {
-        const rollNum = prefix + String(i).padStart(String(startNum).length, '0');
+        const rollNum = prefix + String(i).padStart(digits, '0');
         users.push({
           name: bulkForm.namePattern.replace('{rollno}', rollNum),
           email: bulkForm.emailPattern.replace('{rollno}', rollNum),
           password: bulkForm.defaultPassword,
           role: 'student',
-          department: bulkForm.department,
-          section: bulkForm.section
+          department: bulkForm.department
         });
       }
 
-      const result = await adminUserService.bulkCreate(users);
-      setBulkResult(result);
+      // Send in chunks to avoid large payload failures.
+      const chunkSize = 200;
+      let created = 0;
+      const errors = [];
+      for (let i = 0; i < users.length; i += chunkSize) {
+        const chunk = users.slice(i, i + chunkSize);
+        const result = await adminUserService.bulkCreate(chunk);
+        created += Number(result?.created || 0);
+        if (Array.isArray(result?.errors)) errors.push(...result.errors);
+      }
+
+      setBulkResult({ created, errors });
       setShowBulk(false);
-      setBulkForm({ startRollNumber: '', endRollNumber: '', emailPattern: '{rollno}@student.edu', namePattern: 'Student {rollno}', department: '', section: '', defaultPassword: 'password123' });
+      setBulkForm({ startRollNumber: '', endRollNumber: '', emailPattern: '{rollno}@student.edu', namePattern: 'Student {rollno}', department: '', defaultPassword: 'password123' });
       fetchUsers();
-    } catch (err) { alert(err.response?.data?.error || 'Failed'); }
+    } catch (err) {
+      alert(err.response?.data?.error || err.response?.data?.message || 'Bulk create failed. Please try a smaller range.');
+    }
   };
 
   const roleBadge = (role) => {
@@ -132,14 +155,14 @@ export default function AdminUsers() {
         <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
           <h3 className="font-semibold mb-4">Bulk Create Students</h3>
           <div className="grid grid-cols-2 gap-4">
-            <input value={bulkForm.startRollNumber} onChange={(e) => setBulkForm((f) => ({ ...f, startRollNumber: e.target.value }))} placeholder="Start Roll (e.g. CS001)" className="px-3 py-2 border rounded-lg outline-none" />
-            <input value={bulkForm.endRollNumber} onChange={(e) => setBulkForm((f) => ({ ...f, endRollNumber: e.target.value }))} placeholder="End Roll (e.g. CS050)" className="px-3 py-2 border rounded-lg outline-none" />
+            <input value={bulkForm.startRollNumber} onChange={(e) => setBulkForm((f) => ({ ...f, startRollNumber: e.target.value }))} placeholder="Start ID (e.g. 25100001 or CS001)" className="px-3 py-2 border rounded-lg outline-none" />
+            <input value={bulkForm.endRollNumber} onChange={(e) => setBulkForm((f) => ({ ...f, endRollNumber: e.target.value }))} placeholder="End ID (e.g. 25100700 or CS050)" className="px-3 py-2 border rounded-lg outline-none" />
             <input value={bulkForm.emailPattern} onChange={(e) => setBulkForm((f) => ({ ...f, emailPattern: e.target.value }))} placeholder="Email Pattern" className="px-3 py-2 border rounded-lg outline-none" />
             <input value={bulkForm.namePattern} onChange={(e) => setBulkForm((f) => ({ ...f, namePattern: e.target.value }))} placeholder="Name Pattern" className="px-3 py-2 border rounded-lg outline-none" />
             <input value={bulkForm.department} onChange={(e) => setBulkForm((f) => ({ ...f, department: e.target.value }))} placeholder="Department" className="px-3 py-2 border rounded-lg outline-none" />
-            <input value={bulkForm.section} onChange={(e) => setBulkForm((f) => ({ ...f, section: e.target.value }))} placeholder="Section (e.g. A)" className="px-3 py-2 border rounded-lg outline-none" />
             <input value={bulkForm.defaultPassword} onChange={(e) => setBulkForm((f) => ({ ...f, defaultPassword: e.target.value }))} placeholder="Default Password" className="px-3 py-2 border rounded-lg outline-none" />
           </div>
+          <p className="text-xs text-gray-500 mt-3">Tip: Keep email pattern as <code>{'{rollno}'}@student.edu</code>. Section is optional and not required here.</p>
           <div className="flex space-x-2 mt-4">
             <button onClick={handleBulkCreate} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm">Create Students</button>
             <button onClick={() => setShowBulk(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">Cancel</button>

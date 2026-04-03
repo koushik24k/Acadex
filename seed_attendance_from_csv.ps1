@@ -11,8 +11,7 @@ $adminHeaders = @{ Authorization = "Bearer $adminToken" }
 
 $facultySeeds = @(
   @{ name='Prof Algebra'; email='prof.algebra@acadex.com'; password='faculty123'; role='FACULTY'; department='Engineering'; section='A' },
-  @{ name='Prof Physics'; email='prof.physics@acadex.com'; password='faculty123'; role='FACULTY'; department='Engineering'; section='A' },
-  @{ name='Prof Chemistry'; email='prof.chem@acadex.com'; password='faculty123'; role='FACULTY'; department='Engineering'; section='A' }
+  @{ name='Prof Systems'; email='prof.systems@acadex.com'; password='faculty123'; role='FACULTY'; department='Computer Science'; section='A' }
 )
 
 foreach ($f in $facultySeeds) {
@@ -29,9 +28,9 @@ $facultyByEmail = @{}
 foreach ($u in $allUsers) { $facultyByEmail[$u.email] = $u.id }
 
 $subjectSeeds = @(
-  @{ subjectName='Advanced Mathematics'; subjectCode='MATH201'; facultyEmail='prof.algebra@acadex.com'; section='A'; department='Engineering'; semester='Sem-1' },
-  @{ subjectName='Applied Physics'; subjectCode='PHY201'; facultyEmail='prof.physics@acadex.com'; section='A'; department='Engineering'; semester='Sem-1' },
-  @{ subjectName='Engineering Chemistry'; subjectCode='CHEM201'; facultyEmail='prof.chem@acadex.com'; section='A'; department='Engineering'; semester='Sem-1' }
+  @{ subjectName='Data Structures'; subjectCode='CS201'; facultyEmail='prof.algebra@acadex.com'; section='A'; department='Computer Science'; semester='Sem-3' },
+  @{ subjectName='Operating Systems'; subjectCode='CS301'; facultyEmail='prof.systems@acadex.com'; section='A'; department='Computer Science'; semester='Sem-3' },
+  @{ subjectName='Database Management'; subjectCode='CS302'; facultyEmail='prof.algebra@acadex.com'; section='A'; department='Computer Science'; semester='Sem-3' }
 )
 
 $subjects = Invoke-RestMethod -Uri 'http://localhost:8081/api/subjects' -Method GET -Headers $adminHeaders

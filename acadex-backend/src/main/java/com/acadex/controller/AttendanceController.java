@@ -30,12 +30,17 @@ import org.springframework.web.bind.annotation.RestController;
 import com.acadex.dto.AttendanceMarkRequest;
 import com.acadex.entity.AttendanceRecord;
 import com.acadex.entity.ClassSession;
+import com.acadex.entity.Course;
+import com.acadex.entity.CourseEnrollment;
 import com.acadex.entity.Subject;
 import com.acadex.entity.Timetable;
+import com.acadex.entity.Topic;
 import com.acadex.entity.User;
 import com.acadex.entity.UserRole;
 import com.acadex.repository.AttendanceRecordRepository;
 import com.acadex.repository.ClassSessionRepository;
+import com.acadex.repository.CourseEnrollmentRepository;
+import com.acadex.repository.CourseRepository;
 import com.acadex.repository.SubjectRepository;
 import com.acadex.repository.TimetableRepository;
 import com.acadex.repository.TopicRepository;
@@ -53,6 +58,8 @@ public class AttendanceController {
     @Autowired private ClassSessionRepository classSessionRepo;
     @Autowired private TopicRepository topicRepository;
     @Autowired private TimetableRepository timetableRepository;
+    @Autowired private CourseRepository courseRepository;
+    @Autowired private CourseEnrollmentRepository courseEnrollmentRepository;
 
     // ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ MARK ATTENDANCE (Faculty) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
     @PostMapping("/mark")
@@ -65,11 +72,6 @@ public class AttendanceController {
 
         if (subject == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Subject not found"));
-        }
-
-        // Allow timetable-mapped attendance even when subject.facultyId is not maintained.
-        if (subject.getFacultyId() != null && !subject.getFacultyId().isBlank() && !faculty.getId().equals(subject.getFacultyId())) {
-            return ResponseEntity.status(403).body(Map.of("error", "You are not assigned to this subject"));
         }
 
         // Enforce timetable mapping: attendance can be marked only if faculty has a scheduled class today
@@ -85,6 +87,14 @@ public class AttendanceController {
             // allow attendance to proceed to avoid hard failures caused by inconsistent department labels.
             hasMappedSchedule = !daySchedule.isEmpty();
         }
+
+        // Only block on subject ownership if there is no timetable evidence for this faculty/date.
+        if (subject.getFacultyId() != null && !subject.getFacultyId().isBlank()
+                && !faculty.getId().equals(subject.getFacultyId())
+                && !hasMappedSchedule) {
+            return ResponseEntity.status(403).body(Map.of("error", "You are not assigned to this subject"));
+        }
+
         if (!hasMappedSchedule) {
             return ResponseEntity.status(403).body(Map.of("error", "No timetable mapping found for this subject on selected date"));
         }
@@ -162,6 +172,32 @@ public class AttendanceController {
         final List<Timetable> finalDaySchedule = daySchedule;
         List<Subject> assignedSubjects = subjectRepository.findAll();
 
+        if (courseId != null) {
+            Course selectedCourse = courseRepository.findById(courseId).orElse(null);
+
+            // Strict course mapping path: do not fall back to unrelated global subjects.
+            List<Map<String, Object>> courseMatched = assignedSubjects.stream()
+                .filter(s -> s.getFacultyId() == null || s.getFacultyId().isBlank() || s.getFacultyId().equals(faculty.getId()))
+                .filter(s -> matchesCourseCodeHint(s.getSubjectCode(), selectedCourse != null ? selectedCourse.getCourseCode() : null)
+                    || matchesCourseNameHint(s.getSubjectName(), selectedCourse != null ? selectedCourse.getCourseName() : null)
+                    || matchesCourseNameHint(s.getSubjectCode(), selectedCourse != null ? selectedCourse.getCourseName() : null))
+                .map(this::toSubjectMap)
+                .collect(Collectors.toList());
+
+            if (!courseMatched.isEmpty()) {
+            return ResponseEntity.ok(courseMatched);
+            }
+
+            // Last resort for course-scoped attendance: materialize a deterministic subject from the course itself.
+            if (selectedCourse != null) {
+                Subject ensuredSubject = ensureCourseSubjectForAttendance(selectedCourse, faculty.getId());
+                ensureDefaultTopicExists(ensuredSubject.getId(), selectedCourse.getCourseName());
+                return ResponseEntity.ok(List.of(toSubjectMap(ensuredSubject)));
+            }
+
+            return ResponseEntity.ok(List.of());
+        }
+
         if (finalDaySchedule.isEmpty()) {
             List<Map<String, Object>> fallbackSubjects = assignedSubjects.stream()
                     .filter(s -> s.getFacultyId() == null || s.getFacultyId().isBlank() || s.getFacultyId().equals(faculty.getId()))
@@ -176,11 +212,31 @@ public class AttendanceController {
                         return m;
                     })
                     .collect(Collectors.toList());
+
+            if (!fallbackSubjects.isEmpty()) {
+                return ResponseEntity.ok(fallbackSubjects);
+            }
+
+            List<Map<String, Object>> globalFallback = assignedSubjects.stream()
+                    .map(this::toSubjectMap)
+                    .collect(Collectors.toList());
+            if (!globalFallback.isEmpty()) {
+                return ResponseEntity.ok(globalFallback);
+            }
+
             return ResponseEntity.ok(fallbackSubjects);
         }
 
         List<Subject> facultyScopedSubjects = assignedSubjects.stream()
-            .filter(s -> s.getFacultyId() == null || s.getFacultyId().isBlank() || s.getFacultyId().equals(faculty.getId()))
+            .filter(s -> {
+                boolean ownedByFaculty = s.getFacultyId() == null || s.getFacultyId().isBlank() || s.getFacultyId().equals(faculty.getId());
+                boolean mappedByTimetable = finalDaySchedule.stream().anyMatch(t -> t.getCourse() != null
+                        && (matchesCourseProfile(
+                                s.getDepartment(), s.getSemester(),
+                                t.getCourse().getDepartment(), t.getCourse().getSemester())
+                            || matchesCourseCodeHint(s.getSubjectCode(), t.getCourse().getCourseCode())));
+                return ownedByFaculty || mappedByTimetable;
+            })
             .collect(Collectors.toList());
 
         List<Map<String, Object>> result = facultyScopedSubjects.stream()
@@ -206,6 +262,12 @@ public class AttendanceController {
             result = facultyScopedSubjects.stream()
                 .map(this::toSubjectMap)
                 .collect(Collectors.toList());
+        }
+
+        if (result.isEmpty()) {
+            result = assignedSubjects.stream()
+                    .map(this::toSubjectMap)
+                    .collect(Collectors.toList());
         }
 
         return ResponseEntity.ok(result);
@@ -301,6 +363,15 @@ public class AttendanceController {
         return normalized.isEmpty() ? null : normalized;
     }
 
+    private boolean matchesCourseNameHint(String subjectValue, String courseName) {
+        String s = normalizeText(subjectValue);
+        String c = normalizeText(courseName);
+        if (s == null || c == null) {
+            return false;
+        }
+        return s.equals(c) || s.contains(c) || c.contains(s);
+    }
+
     private Map<String, Object> toSubjectMap(Subject s) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", s.getId());
@@ -310,6 +381,41 @@ public class AttendanceController {
         m.put("section", s.getSection());
         m.put("semester", s.getSemester());
         return m;
+    }
+
+    private Subject ensureCourseSubjectForAttendance(Course course, String facultyId) {
+        Subject existingByCode = subjectRepository.findBySubjectCode(course.getCourseCode()).orElse(null);
+        if (existingByCode != null) {
+            if (existingByCode.getFacultyId() == null || existingByCode.getFacultyId().isBlank()) {
+                existingByCode.setFacultyId(facultyId);
+                existingByCode = subjectRepository.save(existingByCode);
+            }
+            return existingByCode;
+        }
+
+        Subject subject = Subject.builder()
+                .subjectName(course.getCourseName())
+                .subjectCode(course.getCourseCode())
+                .facultyId(facultyId)
+                .department(course.getDepartment())
+                .semester(course.getSemester())
+                .section(null)
+                .build();
+        return subjectRepository.save(subject);
+    }
+
+    private void ensureDefaultTopicExists(Long subjectId, String courseName) {
+        List<Topic> existingTopics = topicRepository.findBySubjectId(subjectId);
+        if (existingTopics != null && !existingTopics.isEmpty()) {
+            return;
+        }
+
+        Topic bootstrapTopic = Topic.builder()
+                .subjectId(subjectId)
+                .unitNo(1)
+                .topicName("Intro - " + (courseName != null ? courseName : "Session"))
+                .build();
+        topicRepository.save(bootstrapTopic);
     }
 
     private boolean areDepartmentAliases(String left, String right) {
@@ -664,6 +770,7 @@ public class AttendanceController {
     @GetMapping("/students")
     public ResponseEntity<?> getStudentsBySection(
             @RequestParam(required = false) Long subjectId,
+            @RequestParam(required = false) Long courseId,
             @RequestParam(required = false) String section,
             @RequestParam(required = false) String department) {
         Subject subject = null;
@@ -683,6 +790,74 @@ public class AttendanceController {
                 section = subject.getSection();
             }
         }
+
+            Long resolvedCourseId = courseId;
+            if (resolvedCourseId == null && subject != null && subject.getSubjectCode() != null && !subject.getSubjectCode().isBlank()) {
+                resolvedCourseId = courseRepository.findByCourseCode(subject.getSubjectCode())
+                    .map(Course::getId)
+                    .orElse(null);
+            }
+
+            if (resolvedCourseId != null) {
+                final String finalSectionFilter = section;
+                List<CourseEnrollment> enrollments = courseEnrollmentRepository.findByCourseId(resolvedCourseId).stream()
+                    .filter(e -> finalSectionFilter == null ||
+                        (e.getSection() != null && finalSectionFilter.equalsIgnoreCase(e.getSection())))
+                    .collect(Collectors.toList());
+
+                List<Map<String, Object>> students = new ArrayList<>();
+                Set<String> seenStudentIds = new java.util.HashSet<>();
+                for (CourseEnrollment enrollment : enrollments) {
+                    User u = userRepository.findById(enrollment.getStudentId()).orElse(null);
+                    if (u == null) continue;
+
+                    UserRole studentRole = userRoleRepository.findByUserId(u.getId()).stream()
+                        .filter(r -> "student".equalsIgnoreCase(r.getRole()))
+                        .findFirst()
+                        .orElse(null);
+
+                    students.add(Map.of(
+                        "id", u.getId(),
+                        "name", u.getName(),
+                        "email", u.getEmail(),
+                        "department", studentRole != null && studentRole.getDepartment() != null ? studentRole.getDepartment() : "",
+                        "section", enrollment.getSection() != null ? enrollment.getSection() : ""
+                    ));
+                    seenStudentIds.add(u.getId());
+                }
+
+                // Enrollment table not populated for this course: fallback to class profile filters.
+                Course resolvedCourse = courseRepository.findById(resolvedCourseId).orElse(null);
+                String inferredDepartment = department != null ? department : (resolvedCourse != null ? resolvedCourse.getDepartment() : null);
+
+                List<UserRole> roleFallback = userRoleRepository.findAll().stream()
+                        .filter(r -> "student".equalsIgnoreCase(r.getRole()))
+                        .filter(r -> inferredDepartment == null ||
+                                (r.getDepartment() != null && inferredDepartment.equalsIgnoreCase(r.getDepartment())))
+                        .filter(r -> finalSectionFilter == null ||
+                                (r.getSection() != null && finalSectionFilter.equalsIgnoreCase(r.getSection())))
+                        .collect(Collectors.toList());
+
+                if (roleFallback.isEmpty()) {
+                    roleFallback = userRoleRepository.findAll().stream()
+                            .filter(r -> "student".equalsIgnoreCase(r.getRole()))
+                            .collect(Collectors.toList());
+                }
+
+                for (UserRole role : roleFallback) {
+                    User u = role.getUser();
+                    if (u == null) continue;
+                    if (seenStudentIds.contains(u.getId())) continue;
+                    students.add(Map.of(
+                            "id", u.getId(),
+                            "name", u.getName(),
+                            "email", u.getEmail(),
+                            "department", role.getDepartment() != null ? role.getDepartment() : "",
+                            "section", role.getSection() != null ? role.getSection() : ""
+                    ));
+                }
+                return ResponseEntity.ok(students);
+            }
 
         final String finalDepartment = department;
         final String finalSection = section;

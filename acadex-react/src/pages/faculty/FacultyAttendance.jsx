@@ -2,13 +2,118 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/DashboardLayout';
-import { attendanceService, topicService } from '../../services';
+import { attendanceService, courseService, subjectService, topicService } from '../../services';
+
+const normalize = (value) => (value || '').toString().trim().toLowerCase();
+const normalizeSemester = (value) => normalize(value).replace(/[^0-9]/g, '');
+
+const getCourseMatchedSubjects = (list, course) => {
+  if (!course || !Array.isArray(list) || list.length === 0) return list || [];
+
+  const code = normalize(course.courseCode);
+  const name = normalize(course.courseName || course.name);
+  const dept = normalize(course.department);
+  const sem = normalizeSemester(course.semester);
+
+  return list.filter((s) => {
+    const sCode = normalize(s.subjectCode);
+    const sName = normalize(s.subjectName);
+    const sDept = normalize(s.department);
+    const sSem = normalizeSemester(s.semester);
+
+    const codeMatch = code && sCode && (sCode.includes(code) || code.includes(sCode));
+    const nameMatch = name && sName && (sName.includes(name) || name.includes(sName));
+    const deptMatch = !dept || !sDept || dept === sDept;
+    const semMatch = !sem || !sSem || sem === sSem;
+
+    return codeMatch || (deptMatch && semMatch && nameMatch);
+  });
+};
+
+const pickBestSubject = (list, course) => {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  if (!course) return String(list[0].id);
+
+  const code = normalize(course.courseCode);
+  const name = normalize(course.courseName || course.name);
+  const dept = normalize(course.department);
+  const sem = normalizeSemester(course.semester);
+
+  let best = null;
+  let bestScore = 0;
+
+  list.forEach((s) => {
+    let score = 0;
+    const sCode = normalize(s.subjectCode);
+    const sName = normalize(s.subjectName);
+    const sDept = normalize(s.department);
+    const sSem = normalizeSemester(s.semester);
+
+    if (code && sCode && (sCode.includes(code) || code.includes(sCode))) score += 50;
+    if (name && sName && (sName.includes(name) || name.includes(sName))) score += 20;
+    if (dept && sDept && dept === sDept) score += 15;
+    if (sem && sSem && sem === sSem) score += 15;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  });
+
+  return best ? String(best.id) : null;
+};
+
+const pickBestByHints = (list, nameHint, codeHint) => {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const nHint = normalize(nameHint);
+  const cHint = normalize(codeHint);
+  if (!nHint && !cHint) return null;
+
+  let best = null;
+  let bestScore = -1;
+  list.forEach((s) => {
+    const sName = normalize(s.subjectName);
+    const sCode = normalize(s.subjectCode);
+    let score = 0;
+    if (cHint && sCode && (sCode === cHint || sCode.includes(cHint) || cHint.includes(sCode))) score += 60;
+    if (nHint && sName && (sName === nHint || sName.includes(nHint) || nHint.includes(sName))) score += 80;
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  });
+
+  return bestScore > 0 && best ? String(best.id) : null;
+};
+
+const filterByHints = (list, nameHint, codeHint) => {
+  if (!Array.isArray(list) || list.length === 0) return [];
+  const nHint = normalize(nameHint);
+  const cHint = normalize(codeHint);
+  if (!nHint && !cHint) return [];
+
+  return list.filter((s) => {
+    const sName = normalize(s.subjectName);
+    const sCode = normalize(s.subjectCode);
+    const codeMatch = cHint && sCode && (sCode === cHint || sCode.includes(cHint) || cHint.includes(sCode));
+    const nameMatch = nHint && sName && (sName === nHint || sName.includes(nHint) || nHint.includes(sName));
+    return Boolean(codeMatch || nameMatch);
+  });
+};
+
+const isCreatedSubject = (subject) => {
+  const code = normalize(subject?.subjectCode).toUpperCase();
+  const department = normalize(subject?.department);
+  return code.startsWith('CS') || department === 'computer science';
+};
 
 export default function FacultyAttendance() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const courseId = searchParams.get('courseId');
   const fromCourse = searchParams.get('fromCourse') === '1';
+  const subjectHint = searchParams.get('subjectHint') || '';
+  const subjectCodeHint = searchParams.get('subjectCodeHint') || '';
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -24,27 +129,85 @@ export default function FacultyAttendance() {
   const [tab, setTab] = useState('mark'); // mark | summary
   const [summary, setSummary] = useState(null);
   const [courseScopedMode, setCourseScopedMode] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+
+  useEffect(() => {
+    if (!courseId) {
+      setSelectedCourse(null);
+      return;
+    }
+    courseService.get(Number(courseId))
+      .then((data) => setSelectedCourse(data || null))
+      .catch(() => setSelectedCourse(null));
+  }, [courseId]);
 
   useEffect(() => {
     if (user?.id) {
       const params = { date: selectedDate };
       if (courseId) params.courseId = Number(courseId);
 
-      attendanceService.getMyScheduledSubjects(user.id, params).then((data) => {
-        const list = Array.isArray(data) ? data : [];
+      attendanceService.getMyScheduledSubjects(user.id, params).then(async (data) => {
+        let list = Array.isArray(data) ? data : [];
+
+        if (courseId) {
+          const hinted = filterByHints(list, subjectHint, subjectCodeHint);
+          if (hinted.length > 0) list = hinted;
+        }
+
+        if (courseId && selectedCourse) {
+          const matched = getCourseMatchedSubjects(list, selectedCourse);
+          if (matched.length > 0) list = matched;
+        }
+
+        // Safety fallback: still allow attendance when timetable mapping API returns no rows.
+        if (list.length === 0) {
+          const fallback = await subjectService.list().catch(() => []);
+          list = (Array.isArray(fallback) ? fallback : []).filter(isCreatedSubject);
+          if (courseId) {
+            const hinted = filterByHints(list, subjectHint, subjectCodeHint);
+            if (hinted.length > 0) list = hinted;
+            else list = [];
+          }
+          if (courseId && selectedCourse) {
+            const matched = getCourseMatchedSubjects(list, selectedCourse);
+            if (matched.length > 0) list = matched;
+          }
+        }
+
         setSubjects(list);
         setCourseScopedMode(Boolean(courseId));
 
-        if (fromCourse && list.length === 1) {
-          setSelectedSubject(String(list[0].id));
+        setSelectedSubject((prev) => {
+          if (prev && list.some((s) => s.id === Number(prev))) return prev;
+          const hintPick = pickBestByHints(list, subjectHint, subjectCodeHint);
+          if (hintPick) return hintPick;
+          if (courseId && selectedCourse) return pickBestSubject(list, selectedCourse);
+          return pickBestSubject(list, selectedCourse);
+        });
+      }).catch(async () => {
+        const fallback = await subjectService.list().catch(() => []);
+        let list = (Array.isArray(fallback) ? fallback : []).filter(isCreatedSubject);
+        if (courseId) {
+          const hinted = filterByHints(list, subjectHint, subjectCodeHint);
+          if (hinted.length > 0) list = hinted;
+          else list = [];
         }
-        if (selectedSubject && !list.some((s) => s.id === Number(selectedSubject))) {
-          setSelectedSubject(null);
+        if (courseId && selectedCourse) {
+          const matched = getCourseMatchedSubjects(list, selectedCourse);
+          if (matched.length > 0) list = matched;
         }
-      }).catch(() => {});
+        setSubjects(list);
+        setSelectedSubject((prev) => {
+          if (prev && list.some((s) => s.id === Number(prev))) return prev;
+          const hintPick = pickBestByHints(list, subjectHint, subjectCodeHint);
+          if (hintPick) return hintPick;
+          if (courseId) return null;
+          return pickBestSubject(list, selectedCourse);
+        });
+      });
       setLoading(false);
     }
-  }, [user, selectedDate, courseId, fromCourse]);
+  }, [user, selectedDate, courseId, fromCourse, selectedCourse, subjectHint, subjectCodeHint]);
 
   useEffect(() => {
     if (!selectedSubject) {
@@ -56,6 +219,7 @@ export default function FacultyAttendance() {
 
     const selected = subjects.find((s) => s.id === Number(selectedSubject));
     const params = { subjectId: Number(selectedSubject) };
+    if (courseId) params.courseId = Number(courseId);
     if (selected?.department) params.department = selected.department;
     if (selected?.section) params.section = selected.section;
 
@@ -179,18 +343,29 @@ export default function FacultyAttendance() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
-            <select
-              value={selectedSubject || ''}
-              onChange={(e) => setSelectedSubject(e.target.value ? e.target.value : null)}
-              className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none bg-slate-50/50"
-            >
-              <option value="">Select Subject</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>{s.subjectName} ({s.subjectCode})</option>
-              ))}
-            </select>
+            {courseScopedMode && selectedSubjectObj ? (
+              <div className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-slate-100 text-slate-700 text-sm">
+                {selectedSubjectObj.subjectCode || selectedSubjectObj.subjectName}
+                {selectedSubjectObj.subjectCode && selectedSubjectObj.subjectName ? ` - ${selectedSubjectObj.subjectName}` : ''}
+              </div>
+            ) : courseScopedMode ? (
+              <div className="w-full px-3 py-2.5 border border-amber-300 rounded-xl bg-amber-50 text-amber-700 text-sm">
+                No mapped subject found for this course ({subjectCodeHint || subjectHint || 'selected course'}).
+              </div>
+            ) : (
+              <select
+                value={selectedSubject || ''}
+                onChange={(e) => setSelectedSubject(e.target.value ? e.target.value : null)}
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none bg-slate-50/50"
+              >
+                <option value="">Select Subject</option>
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.id}>{s.subjectName} ({s.subjectCode})</option>
+                ))}
+              </select>
+            )}
             {subjects.length === 0 && (
-              <p className="text-xs text-rose-600 mt-1">No subject is mapped in timetable for this course/date.</p>
+              <p className="text-xs text-rose-600 mt-1">No subject found for this timetable/date.</p>
             )}
           </div>
           {tab === 'mark' && (

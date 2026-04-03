@@ -71,6 +71,7 @@ export default function FacultyAssignmentGrading() {
                 <div key={s.id} onClick={() => openSubmission(s)} className={`bg-white rounded-xl shadow-sm border p-4 cursor-pointer hover:shadow-md transition ${selected?.id === s.id ? 'ring-2 ring-teal-500' : ''}`}>
                   <p className="font-medium text-sm">Submission #{s.id}</p>
                   <p className="text-xs text-gray-500">Assignment #{s.assignmentId} | {s.submittedAt}</p>
+                  {s.fileUrl && <p className="text-xs text-teal-600 mt-1">Attachment available</p>}
                   {s.marksAwarded != null && <p className="text-xs text-green-600 mt-1">Marks: {s.marksAwarded}</p>}
                 </div>
               ))}

@@ -98,14 +98,19 @@ public class CourseController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> createCourse(@RequestBody Map<String, Object> body) {
+        Integer credits = parseRequiredInt(body.get("credits"));
+        if (credits == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "credits is required and must be a number"));
+        }
+
         Course course = Course.builder()
                 .courseCode(body.get("courseCode").toString())
                 .courseName(body.get("courseName").toString())
                 .department(body.get("department").toString())
                 .semester(body.get("semester").toString())
-                .credits(Integer.valueOf(body.get("credits").toString()))
+                .credits(credits)
                 .type(body.getOrDefault("type", "Core").toString())
-                .totalHours(body.containsKey("totalHours") ? Integer.valueOf(body.get("totalHours").toString()) : null)
+                .totalHours(parseOptionalInt(body.get("totalHours")))
                 .description(body.containsKey("description") ? body.get("description").toString() : null)
                 .status("Draft")
                 .createdBy(body.containsKey("createdBy") ? body.get("createdBy").toString() : null)
@@ -127,13 +132,42 @@ public class CourseController {
         if (body.containsKey("courseCode")) course.setCourseCode(body.get("courseCode").toString());
         if (body.containsKey("department")) course.setDepartment(body.get("department").toString());
         if (body.containsKey("semester")) course.setSemester(body.get("semester").toString());
-        if (body.containsKey("credits")) course.setCredits(Integer.valueOf(body.get("credits").toString()));
+        if (body.containsKey("credits")) {
+            Integer credits = parseRequiredInt(body.get("credits"));
+            if (credits == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "credits must be a number"));
+            }
+            course.setCredits(credits);
+        }
         if (body.containsKey("type")) course.setType(body.get("type").toString());
-        if (body.containsKey("totalHours")) course.setTotalHours(Integer.valueOf(body.get("totalHours").toString()));
+        if (body.containsKey("totalHours")) course.setTotalHours(parseOptionalInt(body.get("totalHours")));
         if (body.containsKey("description")) course.setDescription(body.get("description").toString());
 
         courseRepository.save(course);
         return ResponseEntity.ok(toCourseMap(course));
+    }
+
+    private Integer parseRequiredInt(Object raw) {
+        Integer value = parseOptionalInt(raw);
+        if (value == null) {
+            return null;
+        }
+        return value;
+    }
+
+    private Integer parseOptionalInt(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.toString().trim();
+        if (s.isEmpty() || "null".equalsIgnoreCase(s)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(s);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     @DeleteMapping("/{id}")
@@ -173,6 +207,16 @@ public class CourseController {
         course.setStatus("Locked");
         courseRepository.save(course);
         return ResponseEntity.ok(Map.of("message", "Course locked", "status", "Locked"));
+    }
+
+    @PostMapping({"/{id}/unlock", "/{id}/unclock"})
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> unlockCourse(@PathVariable Long id) {
+        Course course = courseRepository.findById(id).orElse(null);
+        if (course == null) return ResponseEntity.notFound().build();
+        course.setStatus("Published");
+        courseRepository.save(course);
+        return ResponseEntity.ok(Map.of("message", "Course unlocked", "status", "Published"));
     }
 
     // ΓöÇΓöÇ Clone Course ΓöÇΓöÇ
@@ -362,9 +406,14 @@ public class CourseController {
             return ResponseEntity.badRequest().body(Map.of("error", "role must be FACULTY, COORDINATOR, or HOD"));
         }
 
-        // Check if already assigned
-        if (courseFacultyMappingRepository.findByCourseIdAndFacultyIdAndSection(courseId, facultyId, section).isPresent()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Faculty already assigned to this course section"));
+        // If mapping already exists for same course/faculty/section, update role instead of failing.
+        // This allows converting an existing FACULTY mapping to HOD/COORDINATOR from UI.
+        var existing = courseFacultyMappingRepository.findByCourseIdAndFacultyIdAndSection(courseId, facultyId, section);
+        if (existing.isPresent()) {
+            CourseFacultyMapping mapping = existing.get();
+            mapping.setRole(role);
+            courseFacultyMappingRepository.save(mapping);
+            return ResponseEntity.ok(Map.of("message", "Faculty role updated"));
         }
 
         CourseFacultyMapping mapping = CourseFacultyMapping.builder()
@@ -563,6 +612,7 @@ public class CourseController {
             fm.put("id", f.getId());
             fm.put("facultyId", f.getFacultyId());
             fm.put("section", f.getSection());
+            fm.put("role", f.getRole() != null ? f.getRole() : "FACULTY");
             userRepository.findById(f.getFacultyId()).ifPresent(u -> fm.put("facultyName", u.getName()));
             return fm;
         }).collect(Collectors.toList()));

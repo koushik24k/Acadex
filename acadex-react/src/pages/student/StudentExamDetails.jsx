@@ -1,35 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { examService, registrationService } from '../../services';
+import { studentExamService } from '../../services';
 import { Calendar, Clock, BookOpen, MapPin, Users, ArrowLeft } from 'lucide-react';
 
 export default function StudentExamDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [exam, setExam] = useState(null);
+  const location = useLocation();
+
+  const getCachedExam = () => {
+    try {
+      const exams = JSON.parse(localStorage.getItem('student_exams_cache') || '[]');
+      if (!Array.isArray(exams)) return null;
+      return exams.find((e) => String(e.id) === String(id)) || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const [exam, setExam] = useState(() => location.state?.exam || getCachedExam());
   const [registration, setRegistration] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
     Promise.allSettled([
-      examService.get(id),
-      registrationService.check(id),
+      studentExamService.get(id),
+      studentExamService.checkRegistration(id),
     ]).then(([examR, regR]) => {
-      setExam(examR.status === 'fulfilled' ? examR.value : null);
+      const cached = location.state?.exam || getCachedExam();
+      setExam(examR.status === 'fulfilled' ? examR.value : cached);
       setRegistration(regR.status === 'fulfilled' && regR.value?.registered ? regR.value : null);
       setLoading(false);
     });
-  }, [id]);
+  }, [id, location.state]);
 
   const handleRegister = async () => {
     setRegistering(true);
     try {
-      await registrationService.register(id);
-      const reg = await registrationService.check(id);
+      await studentExamService.register(id);
+      const reg = await studentExamService.checkRegistration(id);
       setRegistration(reg?.registered ? reg : null);
-    } catch (err) { alert(err.response?.data?.error || 'Registration failed'); }
+    } catch (err) {
+      const message = err?.response?.data?.error || err?.response?.data?.message || '';
+      if (message.toLowerCase().includes('already registered')) {
+        try {
+          const reg = await studentExamService.checkRegistration(id);
+          setRegistration(reg?.registered ? reg : null);
+          return;
+        } catch {
+          // fall through to alert below
+        }
+      }
+      alert(message || 'Registration failed');
+    }
     finally { setRegistering(false); }
   };
 
@@ -59,6 +84,8 @@ export default function StudentExamDetails() {
   );
 
   const status = getStatus();
+  const examMode = exam.examMode || ((exam.questionCount || 0) > 0 ? 'online' : 'offline');
+  const isOnlineExam = examMode === 'online';
 
   return (
     <DashboardLayout role="student">
@@ -70,6 +97,7 @@ export default function StudentExamDetails() {
         <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">{exam.title}</h1>
+            {exam.courseName && <p className="text-sm text-gray-700">{exam.courseName}{exam.courseCode ? ` (${exam.courseCode})` : ''}</p>}
             {exam.subject && <p className="text-gray-500">{exam.subject}</p>}
           </div>
           <div className="flex items-center space-x-3">
@@ -86,6 +114,13 @@ export default function StudentExamDetails() {
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <h2 className="text-lg font-semibold mb-4">Exam Details</h2>
             <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center space-x-3">
+                <Users className={`w-5 h-5 ${isOnlineExam ? 'text-emerald-500' : 'text-slate-500'}`} />
+                <div>
+                  <p className="text-xs text-gray-500">Mode</p>
+                  <p className="text-sm font-medium capitalize">{examMode}</p>
+                </div>
+              </div>
               <div className="flex items-center space-x-3">
                 <Calendar className="w-5 h-5 text-indigo-500" />
                 <div><p className="text-xs text-gray-500">Date</p><p className="text-sm font-medium">{exam.date || 'TBD'}</p></div>
@@ -116,12 +151,23 @@ export default function StudentExamDetails() {
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <h2 className="text-lg font-semibold mb-4">Instructions</h2>
             <ul className="list-disc list-inside text-sm text-gray-600 space-y-1.5">
-              <li>Ensure a stable internet connection before starting the exam.</li>
-              <li>Once started, the exam cannot be paused.</li>
-              <li>The exam will auto-submit when time expires.</li>
-              <li>MCQ and fill-in-the-blank questions are auto-graded.</li>
-              <li>Subjective answers will be graded by the faculty.</li>
-              <li>Do not refresh the browser during the exam.</li>
+              {isOnlineExam ? (
+                <>
+                  <li>Ensure a stable internet connection before starting the exam.</li>
+                  <li>Once started, the exam cannot be paused.</li>
+                  <li>The exam will auto-submit when time expires.</li>
+                  <li>Single-choice and multiple-correct MCQ answers are auto-graded.</li>
+                  <li>Subjective answers will be graded by the faculty.</li>
+                  <li>Do not refresh the browser during the exam.</li>
+                </>
+              ) : (
+                <>
+                  <li>This is an offline exam and will be conducted in the assigned room.</li>
+                  <li>Carry your ID card and required writing materials.</li>
+                  <li>Reach the exam venue at least 20 minutes before start time.</li>
+                  <li>Follow invigilator instructions for attendance and seating.</li>
+                </>
+              )}
             </ul>
           </div>
         </div>
@@ -140,10 +186,15 @@ export default function StudentExamDetails() {
                   <p className="text-lg font-bold text-gray-900">{registration.seatNumber}</p>
                 </div>
               )}
-              {status === 'ongoing' && (
+              {status === 'ongoing' && isOnlineExam && (
                 <Link to={`/student/exams/${id}/take`} className="block text-center px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition">
-                  Start Exam
+                  Start Online Exam
                 </Link>
+              )}
+              {status === 'ongoing' && !isOnlineExam && (
+                <p className="text-sm text-center text-gray-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  This exam is offline. Please attend in your assigned classroom.
+                </p>
               )}
               {status === 'upcoming' && (
                 <p className="text-sm text-gray-500 text-center">The exam has not started yet. Come back on the scheduled date.</p>

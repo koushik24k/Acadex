@@ -14,45 +14,60 @@ $subjects = Invoke-RestMethod -Method Get -Uri "$base/api/subjects" -Headers $he
 $existingTopics = Invoke-RestMethod -Method Get -Uri "$base/api/topics" -Headers $headers
 
 $topicCatalog = @{
-  'MATH101' = @(
-    @{ unitNo = 1; topicName = 'Functions and Graphs' },
-    @{ unitNo = 1; topicName = 'Matrices and Determinants' },
-    @{ unitNo = 2; topicName = 'Differential Calculus Basics' },
-    @{ unitNo = 2; topicName = 'Applications of Derivatives' },
-    @{ unitNo = 3; topicName = 'Integral Calculus Fundamentals' },
-    @{ unitNo = 3; topicName = 'Definite Integral Applications' }
+  'CS101' = @(
+    @{ unitNo = 1; topicName = 'Arrays and Linked Lists' },
+    @{ unitNo = 1; topicName = 'Stacks and Queues' },
+    @{ unitNo = 2; topicName = 'Binary Trees' },
+    @{ unitNo = 2; topicName = 'Binary Search Trees' },
+    @{ unitNo = 3; topicName = 'Graphs and Traversals' },
+    @{ unitNo = 4; topicName = 'Hash Tables' },
+    @{ unitNo = 5; topicName = 'Algorithm Complexity' }
   )
-  'PHY101' = @(
-    @{ unitNo = 1; topicName = 'Kinematics and Motion' },
-    @{ unitNo = 1; topicName = 'Newtonian Mechanics' },
-    @{ unitNo = 2; topicName = 'Work, Energy and Power' },
-    @{ unitNo = 2; topicName = 'Waves and Oscillations' },
-    @{ unitNo = 3; topicName = 'Electrostatics Basics' },
-    @{ unitNo = 3; topicName = 'Current Electricity' }
+  'CS102' = @(
+    @{ unitNo = 1; topicName = 'Greedy Algorithms' },
+    @{ unitNo = 2; topicName = 'Dynamic Programming' },
+    @{ unitNo = 3; topicName = 'Divide and Conquer' },
+    @{ unitNo = 4; topicName = 'Backtracking and NP Concepts' },
+    @{ unitNo = 5; topicName = 'Amortized Analysis' }
   )
-  'MATH201' = @(
-    @{ unitNo = 1; topicName = 'Advanced Algebraic Methods' },
-    @{ unitNo = 1; topicName = 'Vector Spaces and Linear Maps' },
-    @{ unitNo = 2; topicName = 'Series and Convergence' },
-    @{ unitNo = 2; topicName = 'Partial Differential Equations' },
-    @{ unitNo = 3; topicName = 'Numerical Methods' },
-    @{ unitNo = 3; topicName = 'Optimization Techniques' }
+  'CS201' = @(
+    @{ unitNo = 1; topicName = 'Process Management' },
+    @{ unitNo = 1; topicName = 'CPU Scheduling' },
+    @{ unitNo = 2; topicName = 'Memory Management' },
+    @{ unitNo = 2; topicName = 'Virtual Memory' },
+    @{ unitNo = 3; topicName = 'File Systems' },
+    @{ unitNo = 3; topicName = 'Deadlocks' },
+    @{ unitNo = 4; topicName = 'System Calls and Shells' }
   )
-  'PHY201' = @(
-    @{ unitNo = 1; topicName = 'Modern Physics Introduction' },
-    @{ unitNo = 1; topicName = 'Quantum Concepts' },
-    @{ unitNo = 2; topicName = 'Semiconductor Physics' },
-    @{ unitNo = 2; topicName = 'Optical Fiber Basics' },
-    @{ unitNo = 3; topicName = 'Electromagnetic Waves' },
-    @{ unitNo = 3; topicName = 'Laser Principles and Applications' }
+  'CS301' = @(
+    @{ unitNo = 1; topicName = 'OSI Model' },
+    @{ unitNo = 2; topicName = 'TCP/IP Suite' },
+    @{ unitNo = 3; topicName = 'Routing Protocols' },
+    @{ unitNo = 4; topicName = 'Network Security Basics' },
+    @{ unitNo = 5; topicName = 'Wireless and Mobile Networks' }
   )
-  'CHEM201' = @(
-    @{ unitNo = 1; topicName = 'Atomic Structure and Bonding' },
-    @{ unitNo = 1; topicName = 'Chemical Thermodynamics' },
-    @{ unitNo = 2; topicName = 'Electrochemistry' },
-    @{ unitNo = 2; topicName = 'Corrosion and Prevention' },
-    @{ unitNo = 3; topicName = 'Water Treatment Techniques' },
-    @{ unitNo = 3; topicName = 'Polymer Chemistry Basics' }
+  'CS302' = @(
+    @{ unitNo = 1; topicName = 'ER Modeling' },
+    @{ unitNo = 1; topicName = 'Relational Algebra' },
+    @{ unitNo = 2; topicName = 'SQL Queries' },
+    @{ unitNo = 2; topicName = 'Normalization' },
+    @{ unitNo = 3; topicName = 'Transactions and Concurrency' },
+    @{ unitNo = 3; topicName = 'Indexing and Hashing' },
+    @{ unitNo = 4; topicName = 'Query Optimization' }
+  )
+  'CS334' = @(
+    @{ unitNo = 1; topicName = 'HTML and CSS Foundations' },
+    @{ unitNo = 2; topicName = 'JavaScript Basics' },
+    @{ unitNo = 3; topicName = 'React Components' },
+    @{ unitNo = 4; topicName = 'REST API Integration' },
+    @{ unitNo = 5; topicName = 'Deployment and Hosting' }
+  )
+  'CS092' = @(
+    @{ unitNo = 1; topicName = 'Recursion' },
+    @{ unitNo = 2; topicName = 'Sorting Algorithms' },
+    @{ unitNo = 3; topicName = 'Trees and Graphs' },
+    @{ unitNo = 4; topicName = 'Advanced Problem Solving' },
+    @{ unitNo = 5; topicName = 'Greedy Techniques' }
   )
 }
 
@@ -60,7 +75,7 @@ $created = 0
 $skipped = 0
 
 foreach ($s in $subjects) {
-  $code = $s.subjectCode
+  $code = if ($null -ne $s.subjectCode) { $s.subjectCode.ToString().Trim().ToUpper() } else { '' }
   if (-not $topicCatalog.ContainsKey($code)) {
     continue
   }

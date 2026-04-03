@@ -1,23 +1,17 @@
 -- Insert test data for Acadex
 
 -- First, check if test subject and room exist, if not create them
-INSERT IGNORE INTO subjects (subject_name, subject_code, department, semester, section)
-VALUES ('Mathematics', 'MATH101', 'Engineering', 'Sem-1', 'A');
-
 INSERT IGNORE INTO rooms (name, board_position, capacity, building, floor, room_type, rows_count, columns_count, members_per_bench)
 VALUES ('A101', 'Front', 50, 'Building A', '1', 'Examination', 5, 10, 1);
 
 -- Get the IDs (assuming they were just created or already existed)
-SELECT id INTO @subject_id FROM subjects WHERE subject_code = 'MATH101' LIMIT 1;
 SELECT id INTO @room_id FROM rooms WHERE name = 'A101' LIMIT 1;
 
--- Check if subject_id is NULL (meaning insert failed due to IGNORE)
-SELECT IFNULL(@subject_id, (SELECT MIN(id) FROM subjects)) INTO @subject_id;
 SELECT IFNULL(@room_id, (SELECT MIN(id) FROM rooms)) INTO @room_id;
 
 -- Insert a test exam
 INSERT INTO exams (title, description, status, scheduled_date, scheduled_time, end_time, duration, total_marks, passing_marks, room_id, created_by, created_by_role, class_id, created_at, updated_at)
-VALUES ('Math Final Exam', 'Final examination for Mathematics', 'published', '2024-12-20', '10:00:00', '11:00:00', 60, 100, 40, @room_id, 'admin', 'ADMIN', '1', NOW(), NOW());
+VALUES ('CS Final Exam', 'Final examination for Computer Science', 'published', '2024-12-20', '10:00:00', '11:00:00', 60, 100, 40, @room_id, 'admin', 'ADMIN', '1', NOW(), NOW());
 
 -- Get the exam ID that was just inserted
 SELECT LAST_INSERT_ID() INTO @exam_id;

@@ -4,8 +4,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function ProtectedRoute({ children, role }) {
   const { isAuthenticated, role: userRole, loading } = useAuth();
-  const storedRole = localStorage.getItem('role');
-  const effectiveRole = (userRole || storedRole || '').toString().toLowerCase();
+  const effectiveRole = (userRole || '').toString().toLowerCase();
 
   if (loading) {
     return (

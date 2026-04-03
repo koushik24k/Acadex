@@ -86,6 +86,16 @@ export default function FacultyEditAssignment() {
                 <div>
                   <p className="text-sm font-medium">Student: {s.studentId?.slice(0, 12)}</p>
                   <p className="text-xs text-gray-500">Submitted: {s.submittedAt}</p>
+                  {s.fileUrl && (
+                    <a
+                      href={s.fileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+                    >
+                      View submitted file
+                    </a>
+                  )}
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className={`px-2 py-0.5 rounded-full text-xs ${s.status === 'graded' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{s.status}</span>

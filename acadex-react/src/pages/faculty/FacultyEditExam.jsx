@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { examService, roomService } from '../../services';
+import { facultyExamService, roomService, courseService, authService } from '../../services';
+import { useAuth } from '../../context/AuthContext';
 
 export default function FacultyEditExam() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [rooms, setRooms] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [courseError, setCourseError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -16,12 +20,35 @@ export default function FacultyEditExam() {
   });
 
   useEffect(() => {
-    Promise.all([examService.get(id), roomService.list({ isActive: true }).catch(() => [])]).then(([exam, r]) => {
-      if (exam) setForm({ title: exam.title || '', description: exam.description || '', classId: exam.classId || '', roomId: exam.roomId || '', status: exam.status || 'draft', duration: exam.duration || 60, totalMarks: exam.totalMarks || 100, passingMarks: exam.passingMarks || 40, scheduledDate: exam.scheduledDate || '', scheduledTime: exam.scheduledTime || '', endTime: exam.endTime || '' });
-      setRooms(Array.isArray(r) ? r : []);
-      setLoading(false);
-    });
-  }, [id]);
+    let active = true;
+    const loadEditData = async () => {
+      try {
+        const session = await authService.getSession();
+        const sessionUserId = session?.user?.id;
+
+        const [exam, r, c] = await Promise.all([
+          facultyExamService.get(id),
+          roomService.list({ isActive: true }).catch(() => []),
+          sessionUserId ? courseService.list({ facultyId: sessionUserId }).catch(() => []) : Promise.resolve([]),
+        ]);
+
+        if (!active) return;
+        if (exam) setForm({ title: exam.title || '', description: exam.description || '', classId: exam.classId || '', roomId: exam.roomId || '', status: exam.status || 'draft', duration: exam.duration || 60, totalMarks: exam.totalMarks || 100, passingMarks: exam.passingMarks || 40, scheduledDate: exam.scheduledDate || '', scheduledTime: exam.scheduledTime || '', endTime: exam.endTime || '' });
+        setRooms(Array.isArray(r) ? r : []);
+        const safeCourses = Array.isArray(c) ? c : [];
+        setCourses(safeCourses);
+        setCourseError(safeCourses.length === 0 ? 'No courses are mapped to your active faculty login.' : '');
+      } catch {
+        if (!active) return;
+        setCourseError('Unable to verify your session. Please re-login.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadEditData();
+    return () => { active = false; };
+  }, [id, user?.id]);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -43,7 +70,16 @@ export default function FacultyEditExam() {
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Title</label><input name="title" value={form.title} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none" /></div>
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea name="description" value={form.description} onChange={handleChange} rows={3} className="w-full px-4 py-2 border rounded-lg outline-none" /></div>
         <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">Class ID</label><input name="classId" value={form.classId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none" /></div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+            <select name="classId" value={form.classId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none">
+              <option value="">Select course</option>
+              {courses.map((course) => (
+                <option key={course.id} value={String(course.id)}>{course.courseName} ({course.courseCode})</option>
+              ))}
+            </select>
+            {courseError && <p className="text-xs text-amber-700 mt-2">{courseError}</p>}
+          </div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Status</label><select name="status" value={form.status} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none"><option value="draft">Draft</option><option value="published">Published</option><option value="ongoing">Ongoing</option><option value="completed">Completed</option></select></div>
         </div>
         <div className="grid grid-cols-3 gap-4">

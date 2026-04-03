@@ -39,6 +39,8 @@ export default function AdminDashboard() {
     { label: 'Manage Rooms', path: '/admin/rooms', desc: 'Configure exam rooms' },
     { label: 'Seat Allocation', path: '/admin/seat-allocation', desc: 'Allocate seats for exams' },
     { label: 'Analytics', path: '/admin/analytics', desc: 'View system-wide analytics' },
+    { label: 'Manage Courses', path: '/admin/courses', desc: 'Create course enrollments & manage students' },
+    { label: 'Mark Attendance', path: '/admin/mark-attendance', desc: 'Mark attendance for course students' },
   ];
 
   return (

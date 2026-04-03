@@ -27,6 +27,9 @@ import com.acadex.dto.ExamRequest;
 import com.acadex.dto.QuestionRequest;
 import com.acadex.dto.SeatAllocationResponse;
 import com.acadex.dto.SeatAssignment;
+import com.acadex.entity.Course;
+import com.acadex.entity.CourseEnrollment;
+import com.acadex.entity.CourseFacultyMapping;
 import com.acadex.entity.Exam;
 import com.acadex.entity.ExamRegistration;
 import com.acadex.entity.Question;
@@ -34,6 +37,9 @@ import com.acadex.entity.Room;
 import com.acadex.entity.SeatAllocation;
 import com.acadex.entity.User;
 import com.acadex.entity.UserRole;
+import com.acadex.repository.CourseEnrollmentRepository;
+import com.acadex.repository.CourseFacultyMappingRepository;
+import com.acadex.repository.CourseRepository;
 import com.acadex.repository.ExamRegistrationRepository;
 import com.acadex.repository.ExamRepository;
 import com.acadex.repository.QuestionRepository;
@@ -50,6 +56,9 @@ public class ExamController {
     @Autowired private ExamRepository examRepository;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private ExamRegistrationRepository registrationRepository;
+    @Autowired private CourseRepository courseRepository;
+    @Autowired private CourseFacultyMappingRepository courseFacultyMappingRepository;
+    @Autowired private CourseEnrollmentRepository courseEnrollmentRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private RoomRepository roomRepository;
     @Autowired private SeatAllocationRepository seatAllocationRepository;
@@ -61,12 +70,18 @@ public class ExamController {
     public ResponseEntity<?> listExams(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String createdBy,
-            @RequestParam(required = false) Long id) {
+            @RequestParam(required = false) Long id,
+            Authentication auth) {
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        User currentUser = userRepository.findByEmail(email).orElseThrow();
+
         if (id != null) {
             return examRepository.findById(id)
+                    .filter(e -> canAccessExam(currentUser, e))
                     .map(e -> ResponseEntity.ok(toMap(e)))
                     .orElse(ResponseEntity.notFound().build());
         }
+
         List<Exam> exams;
         if (createdBy != null && status != null) {
             exams = examRepository.findByCreatedByAndStatus(createdBy, status);
@@ -77,6 +92,28 @@ public class ExamController {
         } else {
             exams = examRepository.findAll();
         }
+
+        if (hasRole(currentUser, "student")) {
+            List<CourseEnrollment> enrollments = courseEnrollmentRepository.findByStudentId(currentUser.getId());
+            java.util.Set<String> enrolledCourseIds = enrollments.stream()
+                .map(CourseEnrollment::getCourseId)
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
+            exams = exams.stream()
+                .filter(e -> e.getClassId() != null && enrolledCourseIds.contains(e.getClassId()))
+                .collect(Collectors.toList());
+        } else if (hasRole(currentUser, "faculty")) {
+            List<CourseFacultyMapping> mappings = courseFacultyMappingRepository.findByFacultyId(currentUser.getId());
+            java.util.Set<String> mappedCourseIds = mappings.stream()
+                .map(CourseFacultyMapping::getCourseId)
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
+            exams = exams.stream()
+                .filter(e -> (e.getClassId() != null && mappedCourseIds.contains(e.getClassId()))
+                    || currentUser.getId().equals(e.getCreatedBy()))
+                .collect(Collectors.toList());
+        }
+
         return ResponseEntity.ok(exams.stream().map(this::toMap).collect(Collectors.toList()));
     }
 
@@ -95,6 +132,21 @@ public class ExamController {
         String role = user.getRoles() != null && !user.getRoles().isEmpty()
                 ? user.getRoles().get(0).getRole() : "faculty";
 
+        if (request.getClassId() == null || request.getClassId().isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("courseId is required"));
+        }
+
+        Long courseId = parseCourseId(request.getClassId());
+        if (courseId == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid courseId"));
+        }
+        if (!courseRepository.existsById(courseId)) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Selected course does not exist"));
+        }
+        if (!hasRole(user, "admin") && !courseFacultyMappingRepository.existsByCourseIdAndFacultyId(courseId, user.getId())) {
+            return ResponseEntity.status(403).body(ApiResponse.error("You are not mapped to this course"));
+        }
+
         String now = LocalDateTime.now().toString();
         Exam exam = Exam.builder()
                 .title(request.getTitle())
@@ -108,7 +160,7 @@ public class ExamController {
                 .status(request.getStatus() != null ? request.getStatus() : "draft")
                 .randomizeQuestions(request.getRandomizeQuestions())
                 .randomizeOptions(request.getRandomizeOptions())
-                .classId(request.getClassId())
+                .classId(String.valueOf(courseId))
                 .createdByRole(role)
                 .createdBy(user.getId())
                 .createdAt(now)
@@ -153,6 +205,10 @@ public class ExamController {
         Exam exam = examRepository.findById(id).orElse(null);
         if (exam == null) return ResponseEntity.notFound().build();
 
+        Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        User currentUser = userRepository.findByEmail(email).orElseThrow();
+
         if (request.getTitle() != null) exam.setTitle(request.getTitle());
         if (request.getDescription() != null) exam.setDescription(request.getDescription());
         if (request.getDuration() != null) exam.setDuration(request.getDuration());
@@ -164,7 +220,19 @@ public class ExamController {
         if (request.getStatus() != null) exam.setStatus(request.getStatus());
         if (request.getRandomizeQuestions() != null) exam.setRandomizeQuestions(request.getRandomizeQuestions());
         if (request.getRandomizeOptions() != null) exam.setRandomizeOptions(request.getRandomizeOptions());
-        if (request.getClassId() != null) exam.setClassId(request.getClassId());
+        if (request.getClassId() != null) {
+            Long courseId = parseCourseId(request.getClassId());
+            if (courseId == null) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Invalid courseId"));
+            }
+            if (!courseRepository.existsById(courseId)) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Selected course does not exist"));
+            }
+            if (!hasRole(currentUser, "admin") && !courseFacultyMappingRepository.existsByCourseIdAndFacultyId(courseId, currentUser.getId())) {
+                return ResponseEntity.status(403).body(ApiResponse.error("You are not mapped to this course"));
+            }
+            exam.setClassId(String.valueOf(courseId));
+        }
         if (request.getRoomId() != null) {
             roomRepository.findById(request.getRoomId()).ifPresent(exam::setRoom);
         }
@@ -194,15 +262,23 @@ public class ExamController {
 
     // Query-param based delete: DELETE /exams?id=X (used by frontend)
     @DeleteMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> deleteExamByParam(@RequestParam Long id) {
-        return deleteExam(id);
+    @PreAuthorize("hasRole('FACULTY') or hasRole('ADMIN')")
+    public ResponseEntity<?> deleteExamByParam(@RequestParam Long id, Authentication auth) {
+        return deleteExam(id, auth);
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> deleteExam(@PathVariable Long id) {
+    @PreAuthorize("hasRole('FACULTY') or hasRole('ADMIN')")
+    public ResponseEntity<?> deleteExam(@PathVariable Long id, Authentication auth) {
         if (!examRepository.existsById(id)) return ResponseEntity.notFound().build();
+        Exam exam = examRepository.findById(id).orElse(null);
+        if (exam == null) return ResponseEntity.notFound().build();
+
+        User currentUser = getCurrentUser(auth);
+        if (!canManageExam(currentUser, exam)) {
+            return ResponseEntity.status(403).body(ApiResponse.error("Unauthorized to delete this exam"));
+        }
+
         examRepository.deleteById(id);
         return ResponseEntity.ok(ApiResponse.success("Exam deleted"));
     }
@@ -292,6 +368,9 @@ public class ExamController {
 
     private Map<String, Object> toMap(Exam e) {
         Map<String, Object> m = new HashMap<>();
+        long questionCount = questionRepository.countByExamId(e.getId());
+        Long courseId = parseCourseId(e.getClassId());
+        Course course = courseId != null ? courseRepository.findById(courseId).orElse(null) : null;
         m.put("id", e.getId());
         m.put("title", e.getTitle());
         m.put("description", e.getDescription());
@@ -307,13 +386,58 @@ public class ExamController {
         m.put("randomizeOptions", e.getRandomizeOptions());
         m.put("roomId", e.getRoom() != null ? e.getRoom().getId() : null);
         m.put("classId", e.getClassId());
+        m.put("courseId", courseId);
+        m.put("courseName", course != null ? course.getCourseName() : null);
+        m.put("courseCode", course != null ? course.getCourseCode() : null);
         m.put("createdBy", e.getCreatedBy());
         m.put("createdByRole", e.getCreatedByRole());
         m.put("createdAt", e.getCreatedAt());
         m.put("updatedAt", e.getUpdatedAt());
-        m.put("questionCount", questionRepository.countByExamId(e.getId()));
+        m.put("questionCount", questionCount);
+        m.put("examMode", questionCount > 0 ? "online" : "offline");
         m.put("registrationCount", registrationRepository.countByExamId(e.getId()));
         return m;
+    }
+
+    private Long parseCourseId(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return Long.valueOf(raw.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private boolean hasRole(User user, String role) {
+        if (user == null || user.getRoles() == null) return false;
+        return user.getRoles().stream()
+                .anyMatch(r -> r.getRole() != null && r.getRole().equalsIgnoreCase(role));
+    }
+
+    private boolean canAccessExam(User user, Exam exam) {
+        if (user == null || exam == null) return false;
+        if (hasRole(user, "admin")) return true;
+        if (hasRole(user, "faculty")) {
+            Long courseId = parseCourseId(exam.getClassId());
+            return (courseId != null && courseFacultyMappingRepository.existsByCourseIdAndFacultyId(courseId, user.getId()))
+                    || user.getId().equals(exam.getCreatedBy());
+        }
+        if (hasRole(user, "student")) {
+            Long courseId = parseCourseId(exam.getClassId());
+            return courseId != null && courseEnrollmentRepository.findByCourseIdAndStudentId(courseId, user.getId()).isPresent();
+        }
+        return false;
+    }
+
+    private boolean canManageExam(User user, Exam exam) {
+        if (user == null || exam == null) return false;
+        if (hasRole(user, "admin")) return true;
+        return hasRole(user, "faculty");
+    }
+
+    private User getCurrentUser(Authentication auth) {
+        String email = ((UserDetails) auth.getPrincipal()).getUsername();
+        return userRepository.findByEmail(email).orElseThrow();
     }
 
     // ── Seating Allocation ──

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { examService, roomService } from '../../services';
+import { examService, roomService, courseService } from '../../services';
 
 export default function AdminEditExam() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -20,7 +21,8 @@ export default function AdminEditExam() {
     Promise.all([
       examService.get(id),
       roomService.list({ isActive: true }).catch(() => []),
-    ]).then(([exam, roomData]) => {
+      courseService.list({}).catch(() => []),
+    ]).then(([exam, roomData, courseData]) => {
       if (exam) {
         setForm({
           title: exam.title || '', description: exam.description || '',
@@ -31,6 +33,7 @@ export default function AdminEditExam() {
         });
       }
       setRooms(Array.isArray(roomData) ? roomData : []);
+      setCourses(Array.isArray(courseData) ? courseData : []);
       setLoading(false);
     });
   }, [id]);
@@ -83,6 +86,15 @@ export default function AdminEditExam() {
                 <option value="completed">Completed</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+              <select name="classId" value={form.classId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none">
+                <option value="">Select course</option>
+                {courses.map((course) => <option key={course.id} value={String(course.id)}>{course.courseName} ({course.courseCode})</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Room</label>
               <select name="roomId" value={form.roomId} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg outline-none">
