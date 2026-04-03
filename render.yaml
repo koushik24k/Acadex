@@ -1,7 +1,6 @@
 services:
   - type: web
     name: acadex-backend
-    runtime: java
     env: java
     plan: free
     rootDir: acadex-backend
