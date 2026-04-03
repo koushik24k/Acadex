@@ -1,11 +1,10 @@
 services:
   - type: web
     name: acadex-backend
-    env: java
+    runtime: docker
     plan: free
-    rootDir: acadex-backend
-    buildCommand: mvn -DskipTests clean package
-    startCommand: java -Dserver.port=$PORT -jar target/acadex-backend-1.0.0.jar
+    dockerContext: ./acadex-backend
+    dockerfilePath: ./acadex-backend/Dockerfile
     healthCheckPath: /api/auth/session
     envVars:
       - key: SPRING_DATASOURCE_URL
