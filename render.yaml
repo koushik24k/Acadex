@@ -1,6 +1,7 @@
 services:
   - type: web
     name: acadex-backend
+    runtime: java
     env: java
     plan: free
     rootDir: acadex-backend
@@ -25,11 +26,12 @@ services:
       - key: APP_ML_TIMETABLE_API_ENABLED
         value: "false"
 
-staticSites:
-  - name: acadex-frontend
+  - type: web
+    runtime: static
+    name: acadex-frontend
     rootDir: acadex-react
     buildCommand: npm ci && npm run build
-    publishPath: dist
+    staticPublishPath: dist
     routes:
       - type: rewrite
         source: /*
