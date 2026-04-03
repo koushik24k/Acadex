@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { courseService } from '../../services';
+import { authService, courseService } from '../../services';
 import { useAuth } from '../../context/AuthContext';
 import {
   ArrowLeft,
@@ -42,15 +42,37 @@ export default function StudentCourseResources() {
   const [resourcesLoading, setResourcesLoading] = useState(false);
 
   useEffect(() => {
-    if (user?.id) {
-      loadStudentCourses();
-    }
+    let active = true;
+
+    const resolveStudentId = async () => {
+      try {
+        const session = await authService.getSession();
+        const sessionUserId = session?.user?.id;
+        if (sessionUserId) return sessionUserId;
+      } catch {
+        // Fall through to cached auth state.
+      }
+
+      return user?.id || authService.getUser()?.id || null;
+    };
+
+    const init = async () => {
+      const studentId = await resolveStudentId();
+      if (!active || !studentId) {
+        setLoading(false);
+        return;
+      }
+      await loadStudentCourses(studentId);
+    };
+
+    init();
+    return () => { active = false; };
   }, [user?.id]);
 
-  const loadStudentCourses = async () => {
+  const loadStudentCourses = async (studentId) => {
     try {
       setLoading(true);
-      const data = await courseService.list({ studentId: user.id });
+      const data = await courseService.list({ studentId });
       setCourses(Array.isArray(data) ? data : []);
       if (data?.length > 0 && !selectedCourse) {
         selectCourse(data[0]);

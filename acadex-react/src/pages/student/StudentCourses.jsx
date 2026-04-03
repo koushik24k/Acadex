@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
-import { courseService } from '../../services';
+import { authService, courseService } from '../../services';
 import { useAuth } from '../../context/AuthContext';
 
 export default function StudentCourses() {
@@ -12,9 +12,31 @@ export default function StudentCourses() {
   const [progress, setProgress] = useState(null);
 
   useEffect(() => {
-    if (user?.id) {
-      loadCourses(user.id);
-    }
+    let active = true;
+
+    const resolveStudentId = async () => {
+      try {
+        const session = await authService.getSession();
+        const sessionUserId = session?.user?.id;
+        if (sessionUserId) return sessionUserId;
+      } catch {
+        // Fall through to cached auth state.
+      }
+
+      return user?.id || authService.getUser()?.id || null;
+    };
+
+    const init = async () => {
+      const studentId = await resolveStudentId();
+      if (!active || !studentId) {
+        setLoading(false);
+        return;
+      }
+      await loadCourses(studentId);
+    };
+
+    init();
+    return () => { active = false; };
   }, [user?.id]);
 
   const loadCourses = async (studentId) => {
@@ -22,6 +44,11 @@ export default function StudentCourses() {
       setLoading(true);
       const data = await courseService.list({ studentId });
       setCourses(Array.isArray(data) ? data : []);
+      try {
+        localStorage.setItem('student_courses_cache', JSON.stringify(Array.isArray(data) ? data : []));
+      } catch {
+        // Non-blocking cache write.
+      }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
