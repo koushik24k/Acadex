@@ -5,7 +5,7 @@ services:
     plan: free
     dockerContext: ./acadex-backend
     dockerfilePath: ./acadex-backend/Dockerfile
-    healthCheckPath: /api/auth/session
+    healthCheckPath: /api/health
     envVars:
       - key: SPRING_DATASOURCE_URL
         sync: false
