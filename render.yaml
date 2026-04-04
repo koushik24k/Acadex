@@ -8,9 +8,9 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: SPRING_DATASOURCE_URL
-        value: jdbc:mysql://mysql-2625f945-koushiksr24sk-81ad.f.aivencloud.com:17942/defaultdb?sslMode=REQUIRED&serverTimezone=UTC&allowPublicKeyRetrieval=true&zeroDateTimeBehavior=CONVERT_TO_NULL
+        sync: false
       - key: SPRING_DATASOURCE_USERNAME
-        value: avnadmin
+        sync: false
       - key: SPRING_DATASOURCE_PASSWORD
         sync: false
       - key: APP_JWT_SECRET
