@@ -99,7 +99,10 @@ Frontend: `http://localhost:3001`
 - Server port: 8081
 - Database: MySQL localhost:3306/acadex
 - Credentials: root / D@rk_life24K
-- CORS allowed origins: http://localhost:3001
+- CORS origins are grouped by environment:
+	- Local: `APP_CORS_LOCAL_ORIGINS`
+	- Preview: `APP_CORS_PREVIEW_ORIGINS`
+	- Production: `APP_CORS_PRODUCTION_ORIGINS`
 
 ### Frontend
 `acadex-react/vite.config.js`
@@ -150,6 +153,9 @@ cd acadex-react
 npm run build
 ```
 Deploy `dist/` folder to static hosting.
+
+### Render Deployment
+If you deploy on Render, set `APP_CORS_PREVIEW_ORIGINS` for preview URLs and `APP_CORS_PRODUCTION_ORIGINS` for the live frontend URL. Local development still uses the defaults in `application.properties`.
 
 ## Repository
 https://github.com/koushik24k/Acadex

@@ -15,7 +15,9 @@ services:
         sync: false
       - key: APP_JWT_SECRET
         sync: false
-      - key: APP_CORS_ALLOWED_ORIGINS
+      - key: APP_CORS_PREVIEW_ORIGINS
+        value: https://acadex-frontend-*.onrender.com
+      - key: APP_CORS_PRODUCTION_ORIGINS
         value: https://acadex-frontend.onrender.com,https://www.acadex-frontend.onrender.com
       - key: SPRING_JPA_HIBERNATE_DDL_AUTO
         value: update
